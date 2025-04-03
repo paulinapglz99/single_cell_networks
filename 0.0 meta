@@ -1,0 +1,712 @@
+#metadata analysis
+
+#Libraries --- ---
+
+pacman::p_load("tidyverse", 
+               "ggplot2")
+
+#Get data --- ---
+
+clinical <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_clinical.csv")
+
+biospecimen <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_biospecimen_metadata.csv")
+
+assay <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_assay_scrnaSeq_metadata.csv")
+
+Exp_1_atlas <- vroom::vroom("/datos/rosmap/single_cell/metadata/Experiment1/ROSMAP_Brain.snRNAseq_metadata_cells_20230420.csv")
+
+View(biospecimen)
+
+
+#Filter to obtain only sc assays --- ---
+
+dim(assay)
+table(assay$assay)
+table(assay$dataContributionBatch)
+table(assay$platform)
+table(assay$platformLocation)
+
+#Biospecimen
+
+biospecimen <- biospecimen %>% 
+  filter(nucleicAcidSource == "single nucleus") %>% 
+  filter(exclude == "FALSE")
+
+table(biospecimen$tissue)
+table(biospecimen$organ)
+table(biospecimen$BrodmannArea)
+table(biospecimen$nucleicAcidSource)
+
+#Demographics --- ---
+
+individuals <- biospecimen$individualID
+
+dim(clinical)
+clinical <- clinical %>% 
+  filter(clinical$individualID %in% individuals)
+dim(clinical)
+View(clinical)
+
+
+
+#424 IDs 
+filtered_individuals <- clinical$individualID
+
+print(filtered_individuals)
+write.csv(filtered_individuals, "filtered_individuals.csv", row.names = FALSE)
+
+
+
+#Covariate table --- ---
+
+table(clinical$cogdx)
+
+table(clinical$braaksc)
+
+table(clinical$ceradsc)
+
+table(clinical$educ)
+
+
+# Crear una nueva variable para la clasificación de la enfermedad de Alzheimer y otros estados cognitivos
+clinical <- clinical %>%
+  mutate(is_AD = case_when(
+    cogdx == 1 & (braaksc != 0 & (ceradsc == 1 | ceradsc == 2)) ~ "AD-NC_ASYM",
+    cogdx == 1 & (ceradsc == 4 | ceradsc == 3) ~ "control",
+    (cogdx %in% c(4, 5) & ceradsc == 1) ~ "AD-NC_SYM",
+    cogdx %in% c(2, 3) ~ "MCI",
+    TRUE ~ NA_character_
+  ))
+
+# Verificar la distribución de las categorías
+table(clinical$is_AD)
+
+# Guardar el resultado en un nuevo archivo CSV
+{}
+write.csv(clinical, "clinical_stratified.csv", row.names = FALSE
+
+
+#Demographic and genetic summary table preparation
+
+# -------------------------
+clinical <- clinical %>%
+  mutate(age_death = as.numeric(gsub("\\+", "", age_death)))
+
+# Create demographic summary table grouped by Alzheimer's diagnosis (is_AD)
+tabla_resumen <- clinical %>%
+  group_by(is_AD) %>%
+  summarise(
+    n = as.character(n()),
+    Age = paste0(round(mean(age_death, na.rm = TRUE), 1), " ± ", round(sd(age_death, na.rm = TRUE), 2)),
+    Education = paste0(round(mean(educ, na.rm = TRUE), 1), " ± ", round(sd(educ, na.rm = TRUE), 2)),
+    Males = as.character(sum(msex == 1, na.rm = TRUE)),
+    Females = as.character(sum(msex == 0, na.rm = TRUE))
+  ) %>%
+  rename(Categoria = is_AD)
+
+# Count APOE genotypes per group and convert counts to character for merging
+apoe_tabla <- clinical %>%
+  mutate(apoe_genotype = ifelse(is.na(apoe_genotype), "Unknown", apoe_genotype)) %>%
+  group_by(is_AD, apoe_genotype) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  pivot_wider(names_from = is_AD, values_from = Count, values_fill = 0) %>%
+  rename(Genotype = apoe_genotype) %>%
+  mutate(across(-Genotype, as.character))  # Convert all but Genotype column to character
+
+
+# Transpose summary table so group categories become columns
+tabla_resumen_transpuesta <- tabla_resumen %>%
+  pivot_longer(cols = -Categoria, names_to = "Variable", values_to = "Valor") %>%
+  pivot_wider(names_from = Categoria, values_from = Valor)
+
+# Combine demographic summary and APOE genotype counts into one final table
+tabla_final <- bind_rows(
+  tabla_resumen_transpuesta %>% rename(Genotype = Variable),
+  apoe_tabla
+)
+
+print(tabla_final)
+write.csv(tabla_final, "tabla_clinica_resumen.csv", row.names = FALSE)
+# -------------------------
+# Create a formatted table using gt
+library(gt)
+
+
+tabla_final_gt <- tabla_final %>%
+  gt(rowname_col = "Genotype") %>%
+
+  tab_header(
+    title = md("**Table 1.** Demographic and genetic characteristics of cognitive groups")
+  ) %>%
+  
+  # Group rows into meaningful sections
+  tab_row_group(label = "APOE genotype", rows = Genotype %in% c("22", "23", "24", "33", "34", "44", "Unknown")) %>%
+  tab_row_group(label = "Sex", rows = Genotype %in% c("Males", "Females")) %>%
+  tab_row_group(label = "Years of education", rows = Genotype == "Education") %>%
+  tab_row_group(label = "Age", rows = Genotype == "Age") %>%
+  tab_row_group(label = "Sample size (n)", rows = Genotype == "n") %>%
+  
+
+  cols_align(align = "center", columns = everything()) %>%
+  
+  #style 
+  tab_options(
+    table.border.top.width = px(2),
+    table.border.bottom.width = px(2),
+    heading.title.font.size = 14,
+    heading.title.font.weight = "bold",
+    column_labels.font.weight = "bold",
+    row_group.font.weight = "bold",
+    row_group.font.size = 12
+  )
+
+tabla_final_gt
+# -------------
+
+#ANOVA 
+# Filter data with valid estratification
+clinical_test <- clinical %>%
+  filter(!is.na(is_AD)) 
+
+# ANOVA for age 
+anova_age <- aov(age_death ~ is_AD, data = clinical_test)
+summary(anova_age)
+
+# ANOVA for edu
+anova_educ <- aov(educ ~ is_AD, data = clinical_test)
+summary(anova_educ)
+
+## If ANOVA shows significant differences, perform Tukey's HSD test to identify specific group differences
+turkey <- TukeyHSD(anova_age)
+TukeyHSD(anova_educ)
+
+
+turkey.df <- as.data.frame(turkey$is_AD)
+
+turkey.df$sig <- ifelse(turkey.df$`p adj` > 0.05, "No sig", "Sig")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#########################################################################################################
+
+# Limpiar la columna "age_death" para quitar el "+" y convertir a numérico
+clinical <- clinical %>%
+  mutate(age_death = as.numeric(gsub("\\+", "", age_death)))
+
+# Crear tabla resumen (corrigiendo: convertir todo a character antes de pivotear)
+tabla_resumen <- clinical %>%
+  group_by(is_AD) %>%
+  summarise(
+    n = as.character(n()),  # Convertimos a character
+    Age = paste0(round(mean(age_death, na.rm = TRUE), 1), " ± ", round(sd(age_death, na.rm = TRUE), 2)),
+    Education = paste0(round(mean(educ, na.rm = TRUE), 1), " ± ", round(sd(educ, na.rm = TRUE), 2)),
+    Males = as.character(sum(msex == 1, na.rm = TRUE)),
+    Females = as.character(sum(msex == 0, na.rm = TRUE))
+  ) %>%
+  rename(Categoria = is_AD)
+
+
+# Preparar conteo de genotipos APOE
+apoe_tabla <- clinical %>%
+  mutate(apoe_genotype = ifelse(is.na(apoe_genotype), "Unknown", apoe_genotype)) %>%
+  group_by(is_AD, apoe_genotype) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  pivot_wider(names_from = is_AD, values_from = Count, values_fill = 0) %>%
+  rename(Genotype = apoe_genotype)
+
+# Transponer la tabla_resumen para que las categorías estén como columnas
+tabla_resumen_transpuesta <- tabla_resumen %>%
+  pivot_longer(cols = -Categoria, names_to = "Variable", values_to = "Valor") %>%
+  pivot_wider(names_from = Categoria, values_from = Valor)
+
+# Unir con la tabla de genotipos
+tabla_final <- bind_rows(
+  tabla_resumen_transpuesta %>% rename(Genotype = Variable),
+  apoe_tabla
+)
+
+# Ver la tabla final
+print(tabla_final)
+
+# Guardar en CSV si lo deseas
+write.csv(tabla_final, "tabla_clinica_resumen.csv", row.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Asegurar que dplyr está cargado
+library(dplyr)
+
+# Calcular la edad media y desviación estándar por categoría en is_AD
+resultados <- clinical %>%
+  filter(!is.na(is_AD)) %>%  # Filtrar valores no definidos en is_AD
+  group_by(is_AD) %>%
+  summarise(
+    edad_media = mean(educ, na.rm = TRUE),
+    edad_desviacion = sd(educ, na.rm = TRUE)
+  )
+
+# Mostrar los resultados
+print(resultados)
+
+
+
+
+
+
+
+
+# Ver el tipo de dato de la variable de edad
+str(clinical$age_death)
+
+# Ver los valores únicos en la columna de edad
+unique(clinical$age_death)
+
+
+
+#################
+install.packages("gt")
+
+library(gt)
+
+# Convertir a formato más adecuado
+tabla_gt <- tabla_final %>%
+  gt(rowname_col = "Genotype") %>%
+  
+  # Encabezado
+  tab_header(
+    title = md("**Table 1.** Demographic and genetic characteristics of cognitive groups")
+  ) %>%
+  
+  # Agrupar secciones (como en tu imagen)
+  tab_spanner(
+    label = "Demographics",
+    columns = c("AD-NC_ASYM", "AD-NC_SYM", "control", "MCI")
+  ) %>%
+  
+  # Separar por secciones con etiquetas
+  tab_row_group(
+    group = "APOE genotype",
+    rows = Genotype %in% c("22", "23", "24", "33", "34", "44", "Unknown")
+  ) %>%
+  tab_row_group(
+    group = "Sex",
+    rows = Genotype %in% c("Males", "Females")
+  ) %>%
+  tab_row_group(
+    group = "Years of education",
+    rows = Genotype == "Education"
+  ) %>%
+  tab_row_group(
+    group = "Age",
+    rows = Genotype == "Age"
+  ) %>%
+  tab_row_group(
+    group = "Sample size (n)",
+    rows = Genotype == "n"
+  ) %>%
+  
+  # Alineación al centro
+  cols_align(align = "center", columns = everything()) %>%
+  
+  # Opcional: eliminar bordes y hacerla más "pub style"
+  tab_options(
+    table.border.top.width = px(2),
+    table.border.bottom.width = px(2),
+    column_labels.font.weight = "bold",
+    row_group.font.weight = "bold"
+  )
+
+# Mostrar
+tabla_gt
+
+
+
+
+
+
+
+
+
+
+
+#  tabla
+# Ajustar la edad: valores >90 se convierten en 90
+clinical <- clinical %>%
+  mutate(age_death = ifelse(age_death > 90, 90, age_death))
+# Crear tabla resumen
+tabla_resumen <- clinical %>%
+  group_by(is_AD) %>%
+  summarise(
+    n = as.character(n()),
+    Age = paste0(round(mean(age_death, na.rm = TRUE), 1), " ± ", round(sd(age_death, na.rm = TRUE), 2)),
+    Education = paste0(round(mean(educ, na.rm = TRUE), 1), " ± ", round(sd(educ, na.rm = TRUE), 2)),
+    Males = as.character(sum(msex == 1, na.rm = TRUE)),
+    Females = as.character(sum(msex == 0, na.rm = TRUE))
+  ) %>%
+  rename(Categoria = is_AD)
+
+# APOE tabla
+apoe_tabla <- clinical %>%
+  mutate(apoe_genotype = ifelse(is.na(apoe_genotype), "Unknown", apoe_genotype)) %>%
+  group_by(is_AD, apoe_genotype) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  pivot_wider(names_from = is_AD, values_from = Count, values_fill = 0) %>%
+  rename(Genotype = apoe_genotype) %>%
+  mutate(across(-Genotype, as.character))  # Convertimos todas las columnas (excepto Genotype) a character
+
+# Transponer la tabla resumen
+tabla_resumen_transpuesta <- tabla_resumen %>%
+  pivot_longer(cols = -Categoria, names_to = "Variable", values_to = "Valor") %>%
+  pivot_wider(names_from = Categoria, values_from = Valor)
+
+# Unir ambas tablas
+tabla_final <- bind_rows(
+  tabla_resumen_transpuesta %>% rename(Genotype = Variable),
+  apoe_tabla
+)
+
+# Ver resultado
+print(tabla_final)
+
+# Guardar
+write.csv(tabla_final, "tabla_clinica_resumen.csv", row.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Ajustar la edad: valores >90 se convierten en 90
+clinical <- clinical %>%
+  mutate(age_death = ifelse(age_death > 90, 90, age_death))
+
+# Calcular media y desviación estándar de la edad por categoría
+age_stats <- clinical %>%
+  group_by(is_AD) %>%
+  summarise(
+    Age_Mean = mean(age_death, na.rm = TRUE),
+    Age_SD = sd(age_death, na.rm = TRUE)
+  )
+
+# Mostrar la tabla de estadísticas de edad
+print(age_stats)
+
+
+
+# Calcular media y desviación estándar de age_death por categoría is_AD
+age_stats <- clinical %>%
+  group_by(is_AD) %>%
+  summarise(
+    Age_Mean = mean(age_death, na.rm = TRUE),
+    Age_SD = sd(age_death, na.rm = TRUE)
+  )
+
+# Mostrar la tabla
+print(age_stats)
+
+
+
+
+
+
+
+
+
+
+
+
+# Calcular estadísticas demográficas por grupo
+summary_table <- clinical %>%
+  group_by(is_AD) %>%
+  summarise(
+    Age = mean(age_death, na.rm = TRUE),
+    Age_SD = sd(age_death, na.rm = TRUE),
+    Education = mean(educ, na.rm = TRUE),
+    Education_SD = sd(educ, na.rm = TRUE),
+    Males = sum(msex == 1, na.rm = TRUE),
+    Females = sum(msex == 2, na.rm = TRUE)
+  )
+
+# Contar la distribución de genotipos APOE en cada categoría
+apoe_counts <- clinical %>%
+  group_by(is_AD, apoe_genotype) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  pivot_wider(names_from = apoe_genotype, values_from = Count, values_fill = 0)
+
+# Unir ambas tablas
+final_table <- summary_table %>%
+  left_join(apoe_counts, by = "is_AD")
+
+# Mostrar la tabla final
+print(final_table)
+
+# Guardar la tabla en CSV
+write.csv(final_table, "clinical_summary.csv", row.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Crear metadata_ROSMAP antes de usarlo
+metadata_ROSMAP <- clinical %>%
+  mutate(is_AD = case_when(
+    cogdx == 1 & (braaksc != 0 & (ceradsc == 1 | ceradsc == 2)) ~ "AD-NC_ASYM",
+    cogdx == 1  & (ceradsc == 4 | ceradsc == 3) ~ "control",
+    (cogdx %in% c(4, 5) & ceradsc == 1) ~ "AD-NC_SYM",
+    cogdx %in% c(2, 3) ~ "MCI",
+    TRUE ~ NA_character_
+  ))
+
+# Verifica que metadata_ROSMAP ahora existe
+exists("metadata_ROSMAP")  # Debería devolver TRUE
+dim(metadata_ROSMAP)  # Verifica que tenga datos
+head(metadata_ROSMAP)  # Muestra algunas filas
+
+
+
+
+
+
+
+
+# Crear metadata_ROSMAP antes de usarlo
+metadata_ROSMAP <- clinical %>%
+  mutate(is_AD = case_when(
+    cogdx == 1 & (braaksc != 0 & (ceradsc == 1 | ceradsc == 2)) ~ "AD-NC_ASYM",
+    cogdx == 1  & (ceradsc == 4 | ceradsc == 3) ~ "control",
+    (cogdx %in% c(4, 5) & ceradsc == 1) ~ "AD-NC_SYM",
+    cogdx %in% c(2, 3) ~ "MCI",
+    TRUE ~ NA_character_
+  ))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Age by dx
+
+age <- as.numeric(gsub("\\+", "", metadata_ROSMAP$age_death))
+age_summary_by_dx <- metadata_ROSMAP %>%
+  mutate(age_death = as.numeric(gsub("\\+", "", age_death))) %>% 
+  group_by(dicho_NIA_reagan) %>%
+  summarise(
+    mean_age = mean(age_death, na.rm = TRUE),
+    sd_age = sd(age_death, na.rm = TRUE)
+  )
+
+
+table(metadata_DLFPC_ROSMAP$dicho_NIA_reagan)
+
+#Schooling
+
+mean_schooling <-  metadata_DLFPC_ROSMAP %>%
+  group_by(dicho_NIA_reagan) %>% 
+  summarise(
+    mean_educ = mean(educ, na.rm = TRUE),
+    sd_educ = sd(educ, na.rm = TRUE)
+  )
+
+#Individuals by sex
+
+sex_dx_counts <- metadata_DLFPC_ROSMAP %>%
+  count(dicho_NIA_reagan, msex)  # Contar el número de individuos por diagnóstico y sexo
+
+#Post-mortem interval
+
+pmi_summary_by_dx <- metadata_DLFPC_ROSMAP %>%
+  group_by(dicho_NIA_reagan) %>%
+  summarise(
+    mean_pmi = mean(pmi, na.rm = TRUE),
+    sd_pmi = sd(pmi, na.rm = TRUE)
+  )
+
+#APOE genotype
+
+apoe_summary_by_dx <- metadata_DLFPC_ROSMAP %>%
+  count(dicho_NIA_reagan, apoe_genotype) 
+
+#Race 
+
+race_counts <- metadata_DLFPC_ROSMAP %>%
+  group_by(dicho_NIA_reagan) %>% 
+  mutate(race = case_when(
+    race == 1 ~ "White",
+    race == 2 ~ "Black or African American",
+    race == 3 ~ "American Indian or Alaska Native",
+    race == 4 ~ "Native Hawaiian or Other Pacific Islander",
+    race == 5 ~ "Asian",
+    race == 6 ~ "Other",
+    race == 7 ~ "Unknown",
+    TRUE ~ "Missing"
+  )) %>% 
+  count(race)
+
+#Study
+
+study_summary_by_dx <- metadata_DLFPC_ROSMAP %>%
+  count(dicho_NIA_reagan, Study) 
+
+#END
+
+
+#Data stratification
+metadata_ROSMAP <- clinical %>%
+  mutate(is_AD = case_when(
+    cogdx == 1 & (braaksc != 0 & (ceradsc == 1 | ceradsc ==2)) ~ "AD-NC_ASYM",
+    cogdx == 1  & (ceradsc == 4 | ceradsc == 3 ) ~ "control",
+    (cogdx %in% c(4, 5) & ceradsc == 1) ~ "r AD-NC_SYM",
+    cogdx %in% c(2, 3) ~ "MCI",
+    TRUE ~ NA_character_
+  ))
+
+
+exists("metadata_DLFPC_ROSMAP")
+
+
+
+

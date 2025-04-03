@@ -44,41 +44,6 @@ clinical <- clinical %>%
 dim(clinical)
 View(clinical)
 
-#combine pathos and clinical
-
-clinical <- clinical %>%
-  mutate(NIA_reagan_ADLikelihood = case_when(         
-    (ceradsc == 1 & (braaksc == 5 | braaksc ==  6)) ~ "3", #High likelihood
-    (ceradsc == 2 & (braaksc == 3 | braaksc == 4)) ~ "2", #Intermediate likelihood
-    (ceradsc == 3 & (braaksc == 1 | braaksc == 2)) ~ "1", #Low likelihood
-    ceradsc == 4 ~ "0",  #No AD (0)
-    TRUE ~ NA_character_  # Handle no-specified cases
-  )) %>% 
-  mutate(dicho_NIA_reagan = case_when(
-    (NIA_reagan_ADLikelihood == 0 | NIA_reagan_ADLikelihood == 1) ~ "0", #no AD pathology
-    (NIA_reagan_ADLikelihood == 2 | NIA_reagan_ADLikelihood == 3) ~ "1"  #AD pathology
-  )) %>% 
-  mutate(is_resilient = case_when(
-    cogdx == 1 & (braaksc != 0 & (ceradsc == 1 | ceradsc ==2)) ~ "resilient", 
-    TRUE ~ NA_character_ 
-  )) %>% 
-  mutate(is_AD = case_when(
-    cogdx == 1 & (braaksc != 0 & (ceradsc == 1 | ceradsc == 2)) ~ "AD-NC_ASYM", #no cognitive impairment, AND (NFTs or neuritic)
-    cogdx == 1  & (ceradsc == 4 | ceradsc == 3 ) ~ "control",
-    (cogdx %in% c(4, 5) & (ceradsc == 1 |ceradsc == 2)) ~ "AD-NC_SYM",
-    cogdx %in% c(2, 3) ~ "MCI",
-    TRUE ~ NA_character_
-  ))
-
-table(clinical$is_AD, useNA = "ifany")
-
-# AD-NC_ASYM  AD-NC_SYM    control        MCI       <NA> 
-#   67        136         75        110         36 
-
-clinical <- clinical %>% filter(!is.na(is_AD))
-
-dim(clinical)
-
 #Covariate table --- ---
 
 table(clinical$cogdx)
@@ -91,17 +56,19 @@ table(clinical$educ)
 
 #Age by dx
 
-age <- as.numeric(gsub("\\+", "", clinical$age_death))
+age <- as.numeric(gsub("\\+", "", metadata_DLFPC_ROSMAP$age_death))
 age_mean <- mean(age, na.rm = TRUE)
 age_sd <- sd(age, na.rm = TRUE)
 
-age_summary_by_dx <- clinical %>%
+age_summary_by_dx <- metadata_DLFPC_ROSMAP %>%
   mutate(age_death = as.numeric(gsub("\\+", "", age_death))) %>% 
-  group_by(is_AD) %>%
+  group_by(dicho_NIA_reagan) %>%
   summarise(
     mean_age = mean(age_death, na.rm = TRUE),
     sd_age = sd(age_death, na.rm = TRUE)
   )
+
+table(metadata_DLFPC_ROSMAP$dicho_NIA_reagan)
 
 #Schooling
 
@@ -119,8 +86,8 @@ sex_dx_counts <- metadata_DLFPC_ROSMAP %>%
 
 #Post-mortem interval
 
-pmi_summary_by_dx <- clinical %>%
-  group_by(is_AD) %>%
+pmi_summary_by_dx <- metadata_DLFPC_ROSMAP %>%
+  group_by(dicho_NIA_reagan) %>%
   summarise(
     mean_pmi = mean(pmi, na.rm = TRUE),
     sd_pmi = sd(pmi, na.rm = TRUE)
