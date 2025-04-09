@@ -38,27 +38,23 @@ read_matrix <- function(sample) {
   return(seurat_obj)
 }
 
-demultiplex.f <- function(sample_name, seurat_list, demultiplex) {
+#Function to demultiplex matrix
+
+demultiplex.f <- function(sample_name) {
   message("Processing batch: ", sample_name)
-  
   #Pick a batch
-  seurat_obj <- seurat_list[[sample_name]]
-  
+  #seurat_obj <- seurat_list[[sample_name]]
   #Filter metadata for this batch
   meta_batch <- demultiplex %>%
     filter(libraryBatch == sample_name)
-  
   #Join with barcodes
-  indiv_df <- tibble(cellBarcode = colnames(seurat_obj)) %>%
+  indiv_df <- tibble(cellBarcode = colnames(seurat_list[[sample_name]])) %>%
     left_join(meta_batch, by = "cellBarcode")%>%
     filter(!is.na(individualID))  #Filter NAs
-  
   #Subset Seurat object
-  seurat_obj <- subset(seurat_obj, cells = indiv_df$cellBarcode)
-  
+  seurat_list[[sample_name]] <- subset(seurat_list[[sample_name]], cells = indiv_df$cellBarcode)
   #Assign individualID
-  seurat_obj$individualID <- indiv_df$individualID
-  
+  seurat_list[[sample_name]]$individualID <- indiv_df$individualID
   return(seurat_list)
 }
 
@@ -86,10 +82,8 @@ cat("#Demultiplex --- ---")
 
 demultiplex <- vroom(file = "/datos/rosmap/single_cell/metadata/ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv")
 
-seurat_demux_list <- future_map(
-  sample_names,
-  ~ demultiplex.f(.x, seurat_list, demultiplex)
-)
-
+demux_list <- future_map(.x = sample_names,
+                                .f = demultiplex.f, 
+                                .options = furrr::furrr_options(globals = FALSE))
 #Assign names
 names(seurat_demux_list) <- sample_names
