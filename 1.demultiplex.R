@@ -1,8 +1,6 @@
-#Script para llamar las %%MatrixMarket matrix coordinate integer general
-#y la metadata para
-#1. generar matrices de conteos por lote
-#2. Generar matrices de conteos por condicion 
-#3. Matrices por tipo celular
+#Script to call for cell matrix
+#and metadata for
+#Demultiplexing count matrices per individual
 
 #Libraries --- ---
 cat("#Libraries --- ---")
@@ -17,10 +15,11 @@ pacman::p_load("tidyverse",
                "vroom")
 
 #Load functions --- ---
+cat("#Load functions --- ---")
 
 #Parallel implementation plan for future
 
-future::plan(multisession, workers = 10)
+future::plan(multisession, workers = 5)
 
 #Function to read matrix
 
@@ -40,22 +39,26 @@ read_matrix <- function(sample) {
 
 #Function to demultiplex matrix
 
-demultiplex.f <- function(sample_name) {
-  message("Processing batch: ", sample_name)
-  #Pick a batch
-  #seurat_obj <- seurat_list[[sample_name]]
-  #Filter metadata for this batch
-  meta_batch <- demultiplex %>%
-    filter(libraryBatch == sample_name)
-  #Join with barcodes
-  indiv_df <- tibble(cellBarcode = colnames(seurat_list[[sample_name]])) %>%
-    left_join(meta_batch, by = "cellBarcode")%>%
-    filter(!is.na(individualID))  #Filter NAs
-  #Subset Seurat object
-  seurat_list[[sample_name]] <- subset(seurat_list[[sample_name]], cells = indiv_df$cellBarcode)
-  #Assign individualID
-  seurat_list[[sample_name]]$individualID <- indiv_df$individualID
-  return(seurat_list)
+demultiplex.f <- function(seurat_obj, batch_name, demux_map) {
+  #Original barcodes
+  barcodes <- colnames(seurat_obj)
+  
+  # Filtrar solo el batch correspondiente
+  demux_subset <- demux_map %>% filter(libraryBatch == batch_name)
+  
+  # Empatar barcodes con demux info
+  meta <- tibble(cell = barcodes) %>%
+    left_join(demux_subset, by = c("cell" = "cellBarcode")) %>%
+    mutate(
+      individualID = ifelse(is.na(individualID), "Unknown", individualID),
+      unique_cell_name = paste(batch_name, individualID, cell, sep = "_")
+    )
+  
+  # Agregar metadata y renombrar celdas
+  seurat_obj <- AddMetaData(seurat_obj, metadata = meta %>% column_to_rownames("cell"))
+  colnames(seurat_obj) <- meta$unique_cell_name
+  
+  return(seurat_obj)
 }
 
 #Get data --- ---
@@ -69,7 +72,7 @@ directory <- "/datos/rosmap/single_cell/matrix_exp_2-minimal/"
 matrix_files <- list.files(directory,
                            pattern = "\\.matrix\\.mtx\\.gz$", full.names = TRUE)
 
-#Extract names from samples
+#Extract names from batch samples
 batch_names <- str_replace(basename(matrix_files), "\\.matrix\\.mtx\\.gz$", "")
 
 #List of Seurat objects
@@ -80,10 +83,17 @@ names(seurat_list) <- batch_names
 
 cat("#Demultiplex --- ---")
 
-demultiplex <- vroom(file = "/datos/rosmap/single_cell/metadata/ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv")
+demultiplex.df <- vroom(file = "/datos/rosmap/single_cell/metadata/ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv")
 
-demux_list <- future_map(.x = sample_names,
-                                .f = demultiplex.f, 
-                                .options = furrr::furrr_options(globals = FALSE))
-#Assign names
-names(seurat_demux_list) <- sample_names
+seurat_test <- demultiplex.f(
+  seurat_obj = seurat_list[["190403-B4-A"]],
+  batch_name = "190403-B4-A",
+  demux_map = demultiplex.df
+)
+
+
+
+
+
+
+
