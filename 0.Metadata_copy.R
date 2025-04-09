@@ -1,25 +1,17 @@
 #metadata analysis
 
 #Libraries --- ---
-
 pacman::p_load("tidyverse", 
-               "ggplot2")
-
+               "ggplot2", 
+               "gt")
 #Get data 
-
 clinical <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_clinical.csv")
-
 biospecimen <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_biospecimen_metadata.csv")
-
 assay <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_assay_scrnaSeq_metadata.csv")
-
 Exp_1_atlas <- vroom::vroom("/datos/rosmap/single_cell/metadata/Experiment1/ROSMAP_Brain.snRNAseq_metadata_cells_20230420.csv")
+demultiplex <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv")
 
-View(biospecimen)
-
-
-#Filter to obtain only sc assays --- ---
-
+#Filter to obtain only single nucleus assays
 dim(assay)
 table(assay$assay)
 table(assay$dataContributionBatch)
@@ -27,42 +19,35 @@ table(assay$platform)
 table(assay$platformLocation)
 
 #Biospecimen
-
 biospecimen <- biospecimen %>% 
   filter(nucleicAcidSource == "single nucleus") %>% 
   filter(exclude == "FALSE")
-
 table(biospecimen$tissue)
 table(biospecimen$organ)
 table(biospecimen$BrodmannArea)
 table(biospecimen$nucleicAcidSource)
 
-#Demographics --- ---
-
+#Demographics
 individuals <- biospecimen$individualID
-
 dim(clinical)
+
 clinical <- clinical %>% 
   filter(clinical$individualID %in% individuals)
 dim(clinical)
-View(clinical)
-
-
-
-#424 IDs 
+ 
 filtered_individuals <- clinical$individualID
 
-#Covariate table --- ---
+length(filtered_individuals)
+#write.csv(filtered_individuals, "filtered_individuals.csv", row.names = FALSE)
+
+#Covariate table 
 
 table(clinical$cogdx)
-
 table(clinical$braaksc)
-
 table(clinical$ceradsc)
-
 table(clinical$educ)
 
-# Crear una nueva variable para la clasificación de la enfermedad de Alzheimer y otros estados cognitivos
+# Create Alzheimer's diagnosis classification variable
 clinical <- clinical %>%
   mutate(is_AD = case_when(
     cogdx == 1 & (braaksc != 0 & (ceradsc == 1 | ceradsc == 2)) ~ "AD-NC_ASYM",
@@ -72,14 +57,11 @@ clinical <- clinical %>%
     TRUE ~ NA_character_
   ))
 
-
-table(clinical$is_AD)
-#write.csv(clinical, "clinical_stratified.csv", row.names = FALSE) 
-
-
-#Demographic and genetic summary table preparation
 clinical <- clinical %>%
   mutate(age_death = as.numeric(gsub("\\+", "", age_death)))
+
+table(clinical$is_AD)
+#write.csv(clinical, "clinical_stratified.csv", row.names = FALSE)
 
 # Create demographic summary table grouped by Alzheimer's diagnosis (is_AD)
 tabla_resumen <- clinical %>%
@@ -115,26 +97,23 @@ tabla_final <- bind_rows(
 print(tabla_final)
 #write.csv(tabla_final, "tabla_clinica_resumen.csv", row.names = FALSE)
 
-library(gt)
-
-
+# tabla with gt
 tabla_final_gt <- tabla_final %>%
   gt(rowname_col = "Genotype") %>%
-  
   tab_header(
     title = md("**Table 1.** Demographic and genetic characteristics of cognitive groups")
   ) %>%
-  
+
   # Group rows into meaningful sections
   tab_row_group(label = "APOE genotype", rows = Genotype %in% c("22", "23", "24", "33", "34", "44", "Unknown")) %>%
   tab_row_group(label = "Sex", rows = Genotype %in% c("Males", "Females")) %>%
   tab_row_group(label = "Years of education", rows = Genotype == "Education") %>%
   tab_row_group(label = "Age", rows = Genotype == "Age") %>%
   tab_row_group(label = "Sample size (n)", rows = Genotype == "n") %>%
-  
+
   cols_align(align = "center", columns = everything()) %>%
-  
-  #style 
+
+  #style
   tab_options(
     table.border.top.width = px(2),
     table.border.bottom.width = px(2),
@@ -147,67 +126,29 @@ tabla_final_gt <- tabla_final %>%
 
 tabla_final_gt
 
-# ANOVA analysis
-
-# Filter data with valid stratification
-clinical_test <- clinical %>%
-  filter(!is.na(is_AD)) 
-
-# ANOVA for age at death
-anova_age <- aov(age_death ~ is_AD, data = clinical_test)
-summary(anova_age)
-
-# ANOVA for education
-anova_educ <- aov(educ ~ is_AD, data = clinical_test)
-summary(anova_educ)
-
-# If ANOVA shows significant differences, perform Tukey's HSD test to identify specific group differences
-turkey <- TukeyHSD(anova_age)
-TukeyHSD(anova_educ)
-
-turkey.df <- as.data.frame(turkey$is_AD)
-turkey.df$sig <- ifelse(turkey.df$`p adj` > 0.05, "Not sig", "Sig")
-print(turkey.df)
-turkey.df
-# ANOVA for education
-anova_educ <- aov(educ ~ is_AD, data = clinical_test)
-summary(anova_educ)
-
-# Tukey HSD for education
-tukey_educ <- TukeyHSD(anova_educ)
-
-# Display results in a table
-tukey.df <- as.data.frame(tukey_educ$is_AD)
-tukey.df$sig <- ifelse(tukey.df$`p adj` > 0.05, "Not sig", "Sig")
-
-# Print results
-print(tukey.df)
-
-# --------------------------------------
-
-# Clean and prepare data
+#ANOVA 
 clinical_test <- clinical %>%
   filter(!is.na(is_AD)) %>%
   mutate(
-    age_death = as.numeric(gsub("\\+", "", age_death)),
     msex = as.numeric(msex),
     Study_num = ifelse(Study == "ROS", 1, 0)
   )
 
-# Function to run ANOVA + Tukey and return a table with significance column
-get_tukey_table <- function(variable, var_name = "Variable") {
+# Function to run ANOVA + Tukey and return results
+get_tukey_table <- function(variable, var_name = "Variable"){
   model <- aov(variable ~ is_AD, data = clinical_test)
+  print(summary(model))
   tukey <- TukeyHSD(model)
+  
   df <- as.data.frame(tukey$is_AD)
   df$Comparison <- rownames(df)
   df$Significant <- ifelse(df$`p adj` < 0.05, "Yes", "No")
   df$Variable <- var_name
   rownames(df) <- NULL
   df <- df[, c("Variable", "Comparison", "diff", "lwr", "upr", "p adj", "Significant")]
-  return(df)
-}
+  return(df) } 
 
-# Run for each variable
+  # Run for each variable
 table_age   <- get_tukey_table(clinical_test$age_death, "age_death")
 table_educ  <- get_tukey_table(clinical_test$educ, "educ")
 table_sex   <- get_tukey_table(clinical_test$msex, "Sex")
@@ -216,13 +157,8 @@ table_study <- get_tukey_table(clinical_test$Study_num, "Study (0=MAP, 1=ROS)")
 # Combine all tables into one
 final_tukey_table <- bind_rows(table_age, table_educ, table_sex, table_study)
 
-# View table
-View(final_tukey_table)
+#write.csv(final_tukey_table, "tukey_significance_results.csv", row.names = FALSE)
 
-# (Optional) Save as CSV
-write.csv(final_tukey_table, "tukey_significance_results.csv", row.names = FALSE)
-
-# --------------------------------------
 # Function to create significance matrix
 get_significance_matrix <- function(var, var_label) {
   model <- aov(var ~ is_AD, data = clinical_test)
@@ -239,73 +175,33 @@ sig_educ  <- get_significance_matrix(clinical_test$educ, "Education")
 sig_sex   <- get_significance_matrix(clinical_test$msex, "Sex")
 sig_study <- get_significance_matrix(clinical_test$Study_num, "Study")
 
-# Merge all matrices by "Comparison"
+# Merge all matrices
 significance_matrix <- reduce(
   list(sig_age, sig_educ, sig_sex, sig_study),
   full_join,
   by = "Comparison"
 )
 
-# View the combined matrix
-View(significance_matrix)
-
-# (Optional) Save as CSV
 #write.csv(significance_matrix, "significance_matrix.csv", row.names = FALSE)
 
+# Prepare for heatmap
+significance_matrix_long <- significance_matrix %>% 
+  mutate(across(-Comparison, ~ ifelse(. == "No", 0, ifelse(. == "Yes", 1, .)))) %>% 
+  mutate(across(-Comparison, as.numeric)) %>% 
+  pivot_longer(cols = -Comparison, names_to = "Variable", values_to = "Sig")
+
+# Plot
+significance_matrix_plot <- ggplot(significance_matrix_long, 
+                                   aes(x = Variable, y = Comparison, fill = as.factor(Sig))) +
+  geom_tile(color = "white", lwd = 1.5, linetype = 1) +
+  scale_fill_manual(values = c("0" = "#4F94CD", "1" = "indianred1")) +
+
+  theme_classic()
+
+significance_matrix_plot
 
 
-library(ggplot2)
-
-# Convert the matrix to long format
-matriz_edad_long <- matriz_edad %>%
-  rownames_to_column("Grupo1") %>%
-  pivot_longer(-Grupo1, names_to = "Grupo2", values_to = "Significativo")
-
-# Heatmap plot
-ggplot(matriz_edad_long, aes(x = Grupo1, y = Grupo2, fill = Significativo)) +
-  geom_tile(color = "white") +
-  scale_fill_manual(
-    values = c("Sí" = "indianred1", "No" = "#4F94CD", "—" = "grey90")
-  ) +
-  coord_fixed() +  # to make the tiles square
-  labs(
-    title = "Significance between groups - Age at death",
-    x = "Group 1",
-    y = "Group 2",
-    fill = "Significant?"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-library(ggplot2)
-
-# Convertir la matriz a formato largo
-matriz_edad_long <- matriz_edad %>%
-  rownames_to_column("Grupo1") %>%
-  pivot_longer(-Grupo1, names_to = "Grupo2", values_to = "Significativo")
-
-# Gráfico tipo heatmap
-ggplot(matriz_edad_long, aes(x = Grupo1, y = Grupo2, fill = Significativo)) +
-  geom_tile(color = "white") +
-  scale_fill_manual(
-    values = c("Sí" = "indianred1", "No" = "#4F94CD", "—" = "grey90")
-  ) +
-  coord_fixed() +  # para que los tiles sean cuadrados
-  labs(
-    title = "Significancia entre grupos - Edad al morir",
-    x = "Grupo 1",
-    y = "Grupo 2",
-    fill = "¿Significativo?"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+#Add data to multiplexing info --- ---
 
 
 
-
-  
-  
-  
-  
-  
-  
