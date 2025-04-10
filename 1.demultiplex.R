@@ -23,7 +23,7 @@ future::plan(multisession, workers = 5)
 
 #Function to read matrix
 
-read_matrix <- function(sample) {
+read_matrix.f <- function(sample) {
   message("Reading sample: ", sample)
   
   counts <- ReadMtx(
@@ -37,56 +37,28 @@ read_matrix <- function(sample) {
   return(seurat_obj)
 }
 
+
 #Function to demultiplex matrix
 
-demultiplex.f <- function(seurat_obj, batch_name, demux_map) {
-  #Original barcodes
-  barcodes <- colnames(seurat_obj)
+demultiplex.f <- function(batch_name) {
   #Filter only corresponding batch
-  demux_subset <- demux_map %>% filter(libraryBatch == batch_name)
+  demux_subset <- demultiplex.df %>% filter(libraryBatch == batch_name)
+  #Cell barcodes of the batch
+  barcodes <- names(seurat_list[[batch_name]]$sample)
   #Match demultiplex data with barcodes
-  meta <- tibble(cell = barcodes) %>%
+  meta <- data.frame(cell = barcodes) %>%
     left_join(demux_subset, by = c("cell" = "cellBarcode")) %>%
-    mutate(
-      individualID = ifelse(is.na(individualID), "Unknown", individualID),
-      unique_cell_name = paste(batch_name, individualID, cell, sep = "_")
-    )
-  #Add metadata and rename cells
-  seurat_obj <- AddMetaData(seurat_obj, metadata = meta %>% column_to_rownames("cell"))
-  colnames(seurat_obj) <- meta$unique_cell_name
-
-  message(Sys.time(), " - Processed cells: ", ncol(seurat_obj))
-  return(seurat_obj)
-}
-
-demultiplex.f <- function(seurat_obj, batch_name, demux_map) {
-  #Step 1 -- Demultiplexing ---
-  barcodes <- colnames(seurat_obj)
-  demux_subset <- demux_map %>% filter(libraryBatch == batch_name)
+    filter(!is.na(individualID)) %>% 
+    column_to_rownames("cell")
+  #Assign metadata to the Seurat object
+  seurat_obj <- AddMetaData(seurat_list[[batch_name]], metadata = meta)
+  seurat_ind <- SplitObject(seurat_obj, split.by = "individualID")
+  #Rename element in format batch_individualID
+  names(seurat_ind) <- paste0(batch_name, "_", names(seurat_ind))
   
-  meta <- tibble(cell = barcodes) %>%
-    left_join(demux_subset, by = c("cell" = "cellBarcode")) %>%
-    mutate(
-      individualID = ifelse(is.na(individualID), "Unknown", individualID),
-      unique_cell_name = paste(batch_name, individualID, cell, sep = "_")
-    )
+  message(Sys.time(), " - Processed individuals: ", length(seurat_ind))
+  return(seurat_ind)
   
-  seurat_obj <- AddMetaData(seurat_obj, metadata = meta %>% column_to_rownames("cell"))
-  colnames(seurat_obj) <- meta$unique_cell_name
-  
-  # --- Paso 2: Split por individualID (nuevo) ---
-  individual_ids <- unique(meta$individualID)
-  seurat_list_by_individual <- lapply(individual_ids, function(id) {
-    subset(seurat_obj, subset = individualID == id)
-  })
-  
-  # Asignar nombres a la lista
-  names(seurat_list_by_individual) <- individual_ids
-  
-  message(Sys.time(), " | Processing batch: ", batch_name, " | Total cells: ", ncol(seurat_obj), 
-          " | Individuals: ", length(individual_ids))
-  
-  return(seurat_list_by_individual)  # Retorna una lista de Seurats por individuo
 }
 
 #Get data --- ---
@@ -101,11 +73,21 @@ matrix_files <- list.files(directory,
                            pattern = "\\.matrix\\.mtx\\.gz$", full.names = TRUE)
 
 #Extract names from batch samples
-batch_names <- str_replace(basename(matrix_files), "\\.matrix\\.mtx\\.gz$", "")
+
+batch_names <- names(seurat_list)
 
 #List of Seurat objects
-seurat_list <- future_map(batch_names, read_matrix)
+seurat_list <- future_map(batch_names, read_matrix.f)
 names(seurat_list) <- batch_names
+
+#Demultiplex --- ---
+
+#Try this function 
+# 
+# seurat_obj <- seurat_list[1]
+# batch_name <- batch_names[1]
+# 
+#test <- demultiplex.f(batch_name = batch_names[1])
 
 #Demultiplex --- ---
 
@@ -113,34 +95,19 @@ cat("#Demultiplex --- ---")
 
 demultiplex.df <- vroom(file = "/datos/rosmap/single_cell/metadata/ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv")
 
-seurat_test <- demultiplex.f(
-  seurat_obj = seurat_list[["190403-B4-A"]],
-  batch_name = "190403-B4-A",
-  demux_map = demultiplex.df
-)
-
 demux_list <- split(demultiplex.df, demultiplex.df$libraryBatch)
 
-#Parallel version using future_map2
-# seurat_list <- future_map2(
-#   .x = seurat_list,       #List of Seurat objects
-#   .y = names(seurat_list),#Batch names
-#   .f = ~ {
-#     batch <- .y
-#     demux_subset <- demux_list[[batch]]  # Cada worker recibe solo su subset
-#     demultiplex.f(.x, batch, demux_subset)
-#   },
-#   .progress = TRUE        #Progress bar
-# )
+#Parallel version using future_map
 
-seurat_list <- future_map2(
-  seurat_list,
-  names(seurat_list),
-  function(x, y) {
-    batch <- y
-    demux_subset <- demux_list[[batch]]
-    demultiplex.f(x, batch, demux_subset)
-  },
-  .options = furrr_options(globals = c("demux_list", "demultiplex.f", "libraryBatch"),
-                           packages = c("dplyr", "tibble")) #Manual control of globals
+resultados <- future_map(
+  batch_names, 
+  demultiplex.f,
+  .options = furrr_options(
+    #scheduling = 2,
+    seed = TRUE,           # Para reproducibilidad
+    globals = c("seurat_list", "demultiplex.df"),  # Exportar variables a los workers
+    packages = c("dplyr", "Seurat", "tibble")  # Paquetes necesarios en workers
+  ),
+  .progress = TRUE        # Barra de progreso
 )
+
