@@ -18,6 +18,7 @@ pacman::p_load("tidyverse",
 cat("#Load functions --- ---")
 
 #Parallel implementation plan for future
+set.seed(10)
 
 future::plan(multisession, workers = 5)
 
@@ -42,22 +43,20 @@ read_matrix <- function(sample) {
 demultiplex.f <- function(seurat_obj, batch_name, demux_map) {
   #Original barcodes
   barcodes <- colnames(seurat_obj)
-  
-  # Filtrar solo el batch correspondiente
+  #Filter only corresponding batch
   demux_subset <- demux_map %>% filter(libraryBatch == batch_name)
-  
-  # Empatar barcodes con demux info
+  #Match demultiplex data with barcodes
   meta <- tibble(cell = barcodes) %>%
     left_join(demux_subset, by = c("cell" = "cellBarcode")) %>%
     mutate(
       individualID = ifelse(is.na(individualID), "Unknown", individualID),
       unique_cell_name = paste(batch_name, individualID, cell, sep = "_")
     )
-  
-  # Agregar metadata y renombrar celdas
+  #Add metadata and rename cells
   seurat_obj <- AddMetaData(seurat_obj, metadata = meta %>% column_to_rownames("cell"))
   colnames(seurat_obj) <- meta$unique_cell_name
   
+  message(Sys.time(), " - Processed cells: ", ncol(seurat_obj))
   return(seurat_obj)
 }
 
@@ -85,15 +84,35 @@ cat("#Demultiplex --- ---")
 
 demultiplex.df <- vroom(file = "/datos/rosmap/single_cell/metadata/ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv")
 
-seurat_test <- demultiplex.f(
-  seurat_obj = seurat_list[["190403-B4-A"]],
-  batch_name = "190403-B4-A",
-  demux_map = demultiplex.df
+# seurat_test <- demultiplex.f(
+#   seurat_obj = seurat_list[["190403-B4-A"]],
+#   batch_name = "190403-B4-A",
+#   demux_map = demultiplex.df
+# )
+
+demux_list <- split(demultiplex.df, demultiplex.df$libraryBatch)
+
+#Parallel version using future_map2
+# seurat_list <- future_map2(
+#   .x = seurat_list,       #List of Seurat objects
+#   .y = names(seurat_list),#Batch names
+#   .f = ~ {
+#     batch <- .y
+#     demux_subset <- demux_list[[batch]]  # Cada worker recibe solo su subset
+#     demultiplex.f(.x, batch, demux_subset)
+#   },
+#   .progress = TRUE        #Progress bar
+# )
+
+seurat_list <- future_map2(
+  seurat_list,
+  names(seurat_list),
+  function(x, y) {
+    batch <- y
+    demux_subset <- demux_list[[batch]]
+    demultiplex.f(x, batch, demux_subset)
+  },
+  .options = furrr_options(globals = c("demux_list", "demultiplex.f", "libraryBatch"),
+                           packages = c("dplyr", "tibble")) # Control manual de globals
 )
-
-
-
-
-
-
 
