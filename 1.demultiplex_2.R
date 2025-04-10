@@ -37,58 +37,6 @@ read_matrix <- function(sample) {
   return(seurat_obj)
 }
 
-#Function to demultiplex matrix
-
-demultiplex.f <- function(seurat_obj, batch_name, demux_map) {
-  #Original barcodes
-  barcodes <- colnames(seurat_obj)
-  #Filter only corresponding batch
-  demux_subset <- demux_map %>% filter(libraryBatch == batch_name)
-  #Match demultiplex data with barcodes
-  meta <- tibble(cell = barcodes) %>%
-    left_join(demux_subset, by = c("cell" = "cellBarcode")) %>%
-    mutate(
-      individualID = ifelse(is.na(individualID), "Unknown", individualID),
-      unique_cell_name = paste(batch_name, individualID, cell, sep = "_")
-    )
-  #Add metadata and rename cells
-  seurat_obj <- AddMetaData(seurat_obj, metadata = meta %>% column_to_rownames("cell"))
-  colnames(seurat_obj) <- meta$unique_cell_name
-
-  message(Sys.time(), " - Processed cells: ", ncol(seurat_obj))
-  return(seurat_obj)
-}
-
-demultiplex.f <- function(seurat_obj, batch_name, demux_map) {
-  #Step 1 -- Demultiplexing ---
-  barcodes <- colnames(seurat_obj)
-  demux_subset <- demux_map %>% filter(libraryBatch == batch_name)
-  
-  meta <- tibble(cell = barcodes) %>%
-    left_join(demux_subset, by = c("cell" = "cellBarcode")) %>%
-    mutate(
-      individualID = ifelse(is.na(individualID), "Unknown", individualID),
-      unique_cell_name = paste(batch_name, individualID, cell, sep = "_")
-    )
-  
-  seurat_obj <- AddMetaData(seurat_obj, metadata = meta %>% column_to_rownames("cell"))
-  colnames(seurat_obj) <- meta$unique_cell_name
-  
-  # --- Paso 2: Split por individualID (nuevo) ---
-  individual_ids <- unique(meta$individualID)
-  seurat_list_by_individual <- lapply(individual_ids, function(id) {
-    subset(seurat_obj, subset = individualID == id)
-  })
-  
-  # Asignar nombres a la lista
-  names(seurat_list_by_individual) <- individual_ids
-  
-  message(Sys.time(), " | Processing batch: ", batch_name, " | Total cells: ", ncol(seurat_obj), 
-          " | Individuals: ", length(individual_ids))
-  
-  return(seurat_list_by_individual)  # Retorna una lista de Seurats por individuo
-}
-
 #Get data --- ---
 cat("#Get data --- ---")
 
@@ -108,6 +56,38 @@ seurat_list <- future_map(batch_names, read_matrix)
 names(seurat_list) <- batch_names
 
 #Demultiplex --- ---
+
+#Function to demultiplex matrix
+
+demultiplex.f <- function(batch_name) {
+  #Filter only corresponding batch
+  demux_subset <- demultiplex.df %>% filter(libraryBatch == batch_name)
+  #Cell barcodes of the batch
+  barcodes <- names(seurat_list[[batch_name]]$sample)
+  #Match demultiplex data with barcodes
+  meta <- data.frame(cell = barcodes) %>%
+    left_join(demux_subset, by = c("cell" = "cellBarcode")) %>%
+    filter(!is.na(individualID)) %>% 
+    column_to_rownames("cell")
+  
+  #Assign metadata to the Seurat object
+  seurat_obj <- AddMetaData(seurat_list[[batch_name]], metadata = meta)
+  seurat_ind <- SplitObject(seurat_obj, split.by = "individualID")
+  
+ #Rename element in format batch_individualID
+  names(seurat_ind) <- paste0(batch_name, "_", names(seurat_ind))
+  
+  message(Sys.time(), " - Processed individuals: ", length(seurat_ind))
+  return(seurat_list)
+  
+  }
+  
+#Try this function 
+
+seurat_obj <- seurat_list[1]
+batch_name <- batch_names[1]
+
+demultiplex.f(batch_name = batch_names[1])
 
 cat("#Demultiplex --- ---")
 
