@@ -21,52 +21,47 @@ seurat_ind <- readRDS(file = "/datos/rosmap/single_cell/matrices_demultiplexed.r
 
 #Functions ---- ---
 
-get_seurat_summary <- function(seurat_list) {
-  summary_df <- lapply(names(seurat_list), function(name) {
-    obj <- seurat_list[[name]]  # Acceder al objeto correcto usando el nombre
+get_seurat_summary <- function(sample_names) {
+  summary_list <- lapply(sample_names, function(sample) {
+      
+    # Si no está vacío, calcular normalmente
+    num_cells <- length(seurat_ind[[sample]]@assays$RNA@cells)
+    num_genes <- length(seurat_ind[[sample]]@assays$RNA@features)
+    
     data.frame(
-      sample = name,
-      n_genes = nrow(obj@assays$RNA$counts),  # Genes = filas de la matriz
-      n_cells = ncol(obj@assays$RNA$counts)   # Células = columnas de la matriz
+      sample = sample,
+      num_cells = num_cells,
+      num_genes = num_genes,
+      stringsAsFactors = FALSE
     )
-  }) %>% bind_rows()
+  })
   
-  # Totales
-  total_samples <- nrow(summary_df)
-  total_genes <- sum(summary_df$n_genes)      # Suma de genes POR MUESTRA (no únicos)
-  total_cells <- sum(summary_df$n_cells)
+  summary <- do.call(rbind, summary_list)
   
-  # Mensaje resumen
-  message("Summary of the dataset:")
-  message("Individual samples: ", total_samples)
-  message("Genes (suma por muestra): ", total_genes)
-  message("Células (total): ", total_cells)
+  # Calcular estadísticas summary
+  total_cells <- sum(summary$num_cells)
+  avg_cells <- mean(summary$num_cells)
+  sd_cells <- sd(summary$num_cells)
+  genes <- unique(summary$num_genes) # Asumiendo que todos tienen el mismo número de genes
   
-  return(summary_df)
+  # Mostrar el mensaje con las estadísticas
+  cat("\nResumen estadístico:\n")
+  cat("------------------------------------\n")
+  cat("Número total de células:", total_cells, "\n")
+  cat("Promedio de células por individuo:", round(avg_cells, 1), "\n")
+  cat("Desviación estándar de células por individuo:", round(sd_cells, 1), "\n")
+  cat("Número de genes:", genes[1], "\n") # Tomamos el primero ya que deberían ser iguales
+  cat("------------------------------------\n\n")
+  
+  # Devolver el dataframe como antes
+  return(summary)
+  
 }
+
 
 #How many cells and genes do we have? --- ---
 
-total_cells <- sum(sapply(seurat_ind, 
-                          function(obj) ncol(obj[["RNA"]]$counts)))
-total_genes <- length(unique(unlist(lapply(seurat_ind, function(obj) rownames(obj[["RNA"]]$counts)))))
+sample_names <- names(seurat_ind)
 
-message("The dataset contains ", total_genes, " genes", length(seurat_ind), " individuals and ",  total_cells, " cells.\n")
-
-summary_seurat_list <- function(seurat_list) {
-  stats <- lapply(seurat_list, function(obj) {
-    c(Genes = nrow(obj@assays$RNA$counts), 
-      Cells = ncol(obj@assays$RNA$counts))
-  })
-  
-  total_genes <- sum(sapply(stats, `[`, "Genes"))
-  total_cells <- sum(sapply(stats, `[`, "Cells"))
-  
-  message("Resumen del dataset:\n",
-          "Muestras analizadas: ", length(seurat_list), "\n",
-          "Genes totales (suma por muestra): ", total_genes, "\n",
-          "Células totales: ", total_cells)
-}
-
-
+summary <- get_seurat_summary(sample_names = sample_names)
 
