@@ -138,5 +138,5 @@ db.results <- scDblFinder(sce, returnType = 'table') %>%
 head(db.results)
 
 
-results %>%
+db.results %>%
   dplyr::count(db.results)
