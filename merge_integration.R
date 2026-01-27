@@ -16,7 +16,8 @@ ok <- pacman::p_load("Seurat",
                      "purrr",
                      "optparse",
                      "future",
-                     "vroom")
+                     "vroom", 
+                     "harmony")
 
 if (all(ok)) {
   message("All packages loaded correctly.")
@@ -40,8 +41,8 @@ opt <- parse_args(OptionParser(option_list = option_list))
 set.seed(opt$seed)
 
 stopifnot(file.exists(opt$seurat_list),
-  file.exists(opt$assay_metadata),
-  file.exists(opt$clinical_metadata))
+          file.exists(opt$assay_metadata),
+          file.exists(opt$clinical_metadata))
 
 dir.create(opt$out_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -60,7 +61,7 @@ opt$clinical_metadata <- "/STORAGE/csbig/sc_ADers/metadata/tables/clinical_strat
 
 message("Loading Seurat list...")
 x <- readRDS(opt$seurat_list)
-x <- x[1:5]
+#x <- x[1:5]
 
 message("Loading metadata...")
 assay_metadata.df    <- vroom::vroom(opt$assay_metadata) %>%  distinct()
@@ -71,8 +72,8 @@ clinical_metadata.df <- vroom::vroom(opt$clinical_metadata) %>%
 
 assay_metadata.df <- assay_metadata.df %>%
   mutate(individualID = stringr::str_extract(
-      specimenID,
-      "R[0-9]+$"))
+    specimenID,
+    "R[0-9]+$"))
 
 assay_metadata.df <- assay_metadata.df %>%
   filter(individualID %in% clinical_metadata.df$individualID)
@@ -93,7 +94,7 @@ meta_by_specimen <- assay_metadata.df %>%
   )
 
 valid_specimen_ids <- intersect(names(x),
-  meta_by_specimen$specimenID)
+                                meta_by_specimen$specimenID)
 
 message("Keeping ", length(valid_specimen_ids),
         " / ", length(x),
@@ -102,7 +103,6 @@ message("Keeping ", length(valid_specimen_ids),
 x <- x[valid_specimen_ids]
 
 #Add metadata
-
 
 x <- setNames(
   lapply(names(x), function(spec_id) {
@@ -132,97 +132,10 @@ x <- setNames(
   names(x)
 )
 
-#FALTA: ver como agregar metadata clinica y lo del merge final???
-
-#Now apply SCT transform
-
-plan(multicore, workers = 16)
-options(future.globals.maxSize = 200 * 1024^3)
-
-x <- map(x, ~ SCTransform(
-  .x,
-  assay = "RNA",
-  new.assay.name = "SCT",
-  vars.to.regress = c("percent.mt", "nCount_RNA"),
-  vst.flavor = "v2",
-  return.only.var.genes = FALSE, #change if it's too lazy
-  verbose = TRUE
-))
-
-#saveRDS(x, "x_after_SCT.rds")
-
-#Check PCA
-
-#merge w/0 integration or merging
-seu.merged_pca <- merge(x[[1]], x[-1])
-
-DefaultAssay(seu.merged_pca) <- "SCT"
-VariableFeatures(seu.merged_pca) <- VariableFeatures(x[[1]])
-
-seu.merged_pca <- RunPCA(
-  seu.merged_pca,
-  features = rownames(seu.merged_pca),
-  npcs = 50,
-  verbose = FALSE
-)
-
-#Vis UMAPs
-
-pdf("pca_wo_integration_platformLocation.pdf")
-DimPlot(seu.merged_pca, group.by = "platformLocation")
-dev.off()
-
-pdf("pca_wo_integration_libraryBatch.pdf")
-DimPlot(seu.merged_pca, group.by = "libraryBatch")
-dev.off()
-
-#Next steps are
-
-#Select Integration Features
-
-features <- SelectIntegrationFeatures(
-  object.list = x,
-  nfeatures = 3000)
-
-# for (obj.i in merged_by_individual) {
-#   sct_genes <- rownames(obj.i[["SCT"]]@scale.data)
-#   features <- intersect(features, sct_genes)
-# }
-
-#PrepSCTIntegration
-
-x <- PrepSCTIntegration(
-  object.list = x,
-  anchor.features = features)
-
-anchors <- FindIntegrationAnchors(
-  object.list = x,
-  normalization.method = "SCT",
-  anchor.features = features)
-
-seu.integrated <- IntegrateData(
-  anchorset = anchors,
-  normalization.method = "SCT")
-
-seu.integrated <- RunPCA(seu.integrated, verbose = FALSE)
-seu.integrated <- RunUMAP(seu.integrated, reduction = "pca", dims = 1:30, verbose = FALSE)
-seu.integrated <- FindNeighbors(seu.integrated, reduction = "pca", dims = 1:30)
-seu.integrated <- FindClusters(seu.integrated, resolution = 0.3)
-
-#PCA
-
-pdf("pca_wo_integration_merged_platformLocation.pdf")
-DimPlot(seu.integrated, reduction = "umap",
-        #split.by = "stim",
-        group.by = "libraryBatch")
-dev.off()
-
-#Finally 
-
 #Merge Seurat objects by individual
 
 #For each object, we take the unique individualID
-individual_per_object <- sapply(seu.integrated, function(seu) {
+individual_per_object <- sapply(x, function(seu) {
   unique(seu@meta.data$individualID)
 })
 
@@ -261,29 +174,121 @@ merged_by_individual <- lapply(
 #Check merged_by_individual. It's a list of Seurat objs, one per individual
 length(merged_by_individual)
 
-#Vis PCA again
+#Merge everything lol
+merged <- merge(merged_by_individual[[1]], merged_by_individual[-1])
 
-seu.merged_pca_postmerge <- merge(seu.integrated[[1]], seu.integrated[-1])
+#Normalization
 
-DefaultAssay(seu.merged_pca_postmerge) <- "SCT"
-VariableFeatures(seu.merged_pca_postmerge) <- VariableFeatures(x[[1]])
+DefaultAssay(merged) <- "RNA"
+merged <- NormalizeData(merged, verbose = FALSE)
 
-seu.merged_pca_postmerge <- RunPCA(
-  seu.merged_pca_postmerge,
-  features = rownames(seu.merged_pca_postmerge),
-  npcs = 50,
-  verbose = FALSE
-)
+#Find Variable Features
+
+merged <- FindVariableFeatures(merged, selection.method = "vst", nfeatures = 2000)
+
+#Scale data
+
+merged <- ScaleData(merged, vars.to.regress = c("percent.mt", "nCount_RNA"), verbose = FALSE)
+
+#Run PCA
+
+merged <- RunPCA(merged, features = VariableFeatures(merged), npcs = 50, verbose = FALSE)
+
+#Check elbowplot
+pdf("ElbowPlot_merged.pdf")
+ElbowPlot(merged, ndims = 50)
+dev.off()
+
+merged <- RunUMAP(merged, reduction = "pca", dims = 1:30)
 
 #Vis UMAPs
 
-pdf("pca_wo_integration_merged_platformLocation.pdf")
-DimPlot(seu.merged_pca, group.by = "platformLocation")
+pdf("umap_merged_individual_sequencingBatch_preintegration.pdf")
+DimPlot(merged,
+        reduction = "umap",
+        group.by = "sequencingBatch")
 dev.off()
 
-pdf("pca_wo_integration_merged_libraryBatch.pdf")
-DimPlot(seu.merged_pca, group.by = "libraryBatch")
+pdf("umap_merged_individual_platformLocation_preintegration.pdf")
+DimPlot(merged,
+        reduction = "umap",
+        group.by = "platformLocation")
 dev.off()
+
+pdf("umap_merged_individual_is_AD_preintegration.pdf")
+DimPlot(merged,
+        reduction = "umap",
+        group.by = "is_AD")
+dev.off()
+
+#Run harmony and check for batches
+
+merged$sequencingBatch  <- factor(merged$sequencingBatch)
+merged$platformLocation <- factor(merged$platformLocation)
+
+batch_vars <- c("sequencingBatch"#,
+                #              "platformLocation"
+)
+
+merged <- RunHarmony(
+  merged,
+  group.by.vars = batch_vars,
+  #reduction = "pca",
+  assay.use = "RNA",
+  verbose = TRUE)
+
+#Rum UMAP in new harmonized data
+
+merged <- RunUMAP(
+  merged,
+  reduction = "harmony",
+  dims = 1:30
+)
+
+#Find FindNeighbors
+
+merged <- FindNeighbors(
+  merged,
+  reduction = "harmony",
+  dims = 1:30
+)
+
+merged <- FindClusters(
+  merged,
+  resolution = 0.3
+)
+
+#Vis UMAP
+pdf("umap_harmony_sequencingBatch.pdf")
+DimPlot(merged, reduction = "umap", group.by = "sequencingBatch")
+dev.off()
+
+pdf("umap_harmony_platformLocation.pdf")
+DimPlot(merged, reduction = "umap", group.by = "platformLocation")
+dev.off()
+
+pdf("umap_harmony_is_AD.pdf")
+DimPlot(merged, reduction = "umap", group.by = "is_AD")
+dev.off()
+
+
+pdf("feature_plot_astrocytes.pdf")
+FeaturePlot(
+  merged,
+  features = c("GFAP", "AQP4"),  # Astrocytes
+  reduction = "umap"
+)
+dev.off()
+
+pdf("feature_plot_neurons.pdf")
+FeaturePlot(
+  merged,
+  features = c("RBFOX3", "MAP2"), # Neurons
+  reduction = "umap"
+)
+dev.off()
+
+#Finally 
 
 #Save output
 output_file <- file.path(outdir, "seurat_list_sctransform_normalized.rds")
