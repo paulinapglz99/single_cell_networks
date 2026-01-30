@@ -1,21 +1,24 @@
 #!/usr/bin/env Rscript
 
-#This script takes single cell qced data
+#This script takes single cell qced data and transforms it, 
 #then merges data by individual
 #and finally, integrates data and correct batch and other technical effects
 
+start_time <- Sys.time()
 #If any of this packages needed..
 if (!requireNamespace("pacman", quietly = FALSE)) install.packages("pacman", repos = "https://cloud.r-project.org")
 if (!requireNamespace("optparse", quietly = FALSE)) install.packages("optparse", repos = "https://cloud.r-project.org")
+#install.packages("sctransform")
+#BiocManager::install('glmGamPoi')
 
 ok <- pacman::p_load("Seurat",
                      "tidyverse",
+                     #"sctransform",
                      "purrr",
                      "optparse",
                      "future",
                      "vroom", 
-                     "harmony", 
-                     "future.apply")
+                     "harmony")
 
 if (all(ok)) {
   message("All packages loaded correctly.")
@@ -43,6 +46,7 @@ stopifnot(file.exists(opt$seurat_list),
           file.exists(opt$clinical_metadata))
 
 dir.create(opt$out_dir, recursive = TRUE, showWarnings = FALSE)
+setwd(opt$out_dir)
 
 #Parallelization
 
@@ -52,22 +56,23 @@ options(future.globals.maxSize = 200 * 1024^3)
 #Load data
 
 #Just por ahora, comentar despues
+# 
+# opt$seurat_list <- "/STORAGE/csbig/matrices_demultiplexed_minimal_QC-2026-01-28_19-04/seurat_list_filtered.rds"
+# opt$assay_metadata <- "/STORAGE/csbig/sc_ADers/metadata/ROSMAP_assay_scrnaSeq_metadata.csv"
+# opt$clinical_metadata <- "/STORAGE/csbig/sc_ADers/metadata/tables/clinical_stratified.csv"
+# opt$out_dir <- "~/AD_single_cell/merge_integration_minimal_data_frito"
 
-opt$seurat_list <- "/STORAGE/csbig/matrices_demultiplexed_minimal_QC-2026-01-28_19-04/seurat_list_filtered.rds"
-opt$assay_metadata <- "/STORAGE/csbig/sc_ADers/metadata/ROSMAP_assay_scrnaSeq_metadata.csv"
-opt$clinical_metadata <- "/STORAGE/csbig/sc_ADers/metadata/tables/clinical_stratified.csv"
-opt$out_dir <- "~/AD_single_cell/merge_integration_minimal_data"
-
-message("Loading Seurat list...\n")
+message("Loading Seurat list...")
 x <- readRDS(opt$seurat_list)
 #x <- x[1:5]
 
-message("Loading metadata... \n")
-assay_metadata.df    <- vroom::vroom(opt$assay_metadata) %>% distinct()
+message("Loading metadata...")
+assay_metadata.df    <- vroom::vroom(opt$assay_metadata) %>%  distinct()
 clinical_metadata.df <- vroom::vroom(opt$clinical_metadata) %>% 
   filter(!is.na(is_AD)) %>% distinct()
-
-message("#Add metadata to the Seurat object\n")
+dim(assay_metadata.df)
+dim(clinical_metadata.df)
+#Add metadata to the Seurat object
 
 assay_metadata.df <- assay_metadata.df %>%
   mutate(individualID = stringr::str_extract(
@@ -76,7 +81,7 @@ assay_metadata.df <- assay_metadata.df %>%
 
 assay_metadata.df <- assay_metadata.df %>%
   filter(individualID %in% clinical_metadata.df$individualID)
-
+dim(assay_metadata.df)
 #Metadata final por specimen
 meta_by_specimen <- assay_metadata.df %>%
   select(
@@ -89,15 +94,14 @@ meta_by_specimen <- assay_metadata.df %>%
   ) %>%
   left_join(
     clinical_metadata.df,
-    by = "individualID"
-  )
+    by = "individualID")
 
 valid_specimen_ids <- intersect(names(x),
                                 meta_by_specimen$specimenID)
 
 message("Keeping ", length(valid_specimen_ids),
         " / ", length(x),
-        " Seurat objects \n")
+        " Seurat objects")
 #Filter only specimen ids with a valid 
 x <- x[valid_specimen_ids]
 
@@ -131,122 +135,96 @@ x <- setNames(
   names(x)
 )
 
-message("#Merge Seurat objects by individual \n")
-
-#For each object, we take the unique individualID
-individual_per_object <- sapply(x, function(seu) {
-  unique(seu@meta.data$individualID)
-})
-
-#Sanity check: each object must have only one individual :$
-stopifnot(all(lengths(individual_per_object) == 1))
-
-#Group objects by individual, this creates a list where each element is
-#a list of Seurat objects from the same individual
-objects_ind <- split(x, individual_per_object)
-
-#Merge libraries belonging to the same individual
-
-message("Merging libraries per individual...")
-
-merged_by_individual <- future_lapply(
-  objects_ind,
-  function(seu_list) {
-    if (length(seu_list) == 1) return(seu_list[[1]])
-    Reduce(
-      function(a, b) merge(a, b, merge.data = TRUE),
-      seu_list
-    )
-  }
-)
-
-rm(x, objects_ind)
-gc()
-
-message("Preprocessing per individual (Normalize / HVG / Scale / PCA)...")
-
-merged_by_individual <- future_lapply(
-  merged_by_individual,
-  function(seu) {
-    
-    DefaultAssay(seu) <- "RNA"
-    
-    seu <- NormalizeData(seu, verbose = FALSE)
-    seu <- FindVariableFeatures(seu, nfeatures = 2000, verbose = FALSE)
-    seu <- ScaleData(
-      seu,
-      vars.to.regress = c("percent.mt", "nCount_RNA"),
-      verbose = FALSE
-    )
-    seu <- RunPCA(seu, npcs = 30, verbose = FALSE)
-    
-    seu
-  }
-)
-
-saveRDS(
-  merged_by_individual,
-  file = file.path(opt$out_dir, "by_individual_preprocessed.rds")
-)
-
-message("#Merge everything lol \n")
-#merged <- merge(merged_by_individual[[1]], merged_by_individual[-1])
-merged <- Reduce(
-  function(x, y) merge(x, y, merge.data = TRUE),
-  merged_by_individual
-)
+# #Merge Seurat objects by individual
 # 
-# message("#Save intermedial data \n")
+# #For each object, we take the unique individualID
+# individual_per_object <- sapply(x, function(seu) {
+#   unique(seu@meta.data$individualID)
+# })
 # 
-# saveRDS(merged, file.path(opt$out_dir, "merged_pre_harmony.rds"))
+# #Sanity check: each object must have only one individual :$
+# stopifnot(all(lengths(individual_per_object) == 1))
 # 
-# message("#Normalization \n")
+# #Group objects by individual, this creates a list where each element is
+# #a list of Seurat objects from the same individual
+# objects_ind <- split(x, individual_per_object)
 # 
+# #Merge libraries belonging to the same individual
+# 
+# merged_by_individual <- lapply(
+#   objects_ind,
+#   function(seu_list) {
+#     
+#     #If there is only one bookshop, return as is.
+#     if (length(seu_list) == 1) {
+#       return(seu_list[[1]])
+#     }
+#     
+#     #Initialize for loop
+#     merged_seu <- seu_list[[1]]
+#     
+#     #Merge everything
+#     for (i in 2:length(seu_list)) {
+#       merged_seu <- merge(
+#         merged_seu,
+#         seu_list[[i]],
+#         merge.data = TRUE
+#       )}
+#     
+#     merged_seu
+#   })
+# 
+# #Check merged_by_individual. It's a list of Seurat objs, one per individual
+# length(merged_by_individual)
+
+#Merge everything lol
+merged <- merge(x[[1]], x[-1])
+
+#Normalization
+
 DefaultAssay(merged) <- "RNA"
-# merged <- NormalizeData(merged, verbose = FALSE)
-# 
-# message("#Find Variable Features")
-# 
-# merged <- FindVariableFeatures(merged, selection.method = "vst", nfeatures = 2000)
-# 
-# message("#Scale data")
-# 
-# merged <- ScaleData(merged, vars.to.regress = c("percent.mt", "nCount_RNA"), verbose = FALSE)
- 
-message("#Run PCA post merge, pre integration")
- 
-merged <- RunPCA(merged, features = VariableFeatures(merged),
-                 npcs = 30, 
-                 verbose = FALSE)
+merged <- NormalizeData(merged, verbose = FALSE)
+
+#Find Variable Features
+
+merged <- FindVariableFeatures(merged, selection.method = "vst", nfeatures = 2000)
+
+#Scale data
+
+merged <- ScaleData(merged, vars.to.regress = c("percent.mt", "nCount_RNA"), verbose = FALSE)
+
+#Run PCA
+
+merged <- RunPCA(merged, features = VariableFeatures(merged), npcs = 50, verbose = FALSE)
 
 #Check elbowplot
 pdf("ElbowPlot_merged.pdf")
 ElbowPlot(merged, ndims = 50)
 dev.off()
 
-merged <- RunUMAP(merged, reduction = "pca", dims = 1:20)
+merged <- RunUMAP(merged, reduction = "pca", dims = 1:30)
 
-message("#Save UMAPs")
+#Vis UMAPs
 
-pdf("umap_merged_individual_sequencingBatch_preintegration.pdf")
+pdf(file.path(opt$out_dir,"umap_merged_individual_sequencingBatch_preintegration.pdf"))
 DimPlot(merged,
         reduction = "umap",
         group.by = "sequencingBatch")
 dev.off()
 
-pdf("umap_merged_individual_platformLocation_preintegration.pdf")
+pdf(file.path(opt$out_dir,"umap_merged_individual_platformLocation_preintegration.pdf"))
 DimPlot(merged,
         reduction = "umap",
         group.by = "platformLocation")
 dev.off()
 
-pdf("umap_merged_individual_is_AD_preintegration.pdf")
+pdf(file.path(opt$out_dir,"umap_merged_individual_is_AD_preintegration.pdf"))
 DimPlot(merged,
         reduction = "umap",
         group.by = "is_AD")
 dev.off()
 
-message("#Run harmony and check for batches")
+message("#Run harmony and check for batches \n")
 
 merged$sequencingBatch  <- factor(merged$sequencingBatch)
 merged$platformLocation <- factor(merged$platformLocation)
@@ -254,8 +232,6 @@ merged$platformLocation <- factor(merged$platformLocation)
 batch_vars <- c("sequencingBatch"#,
                 #              "platformLocation"
 )
-
-message(print(paste0("Batch variables are ", batch_vars)))
 
 merged <- RunHarmony(
   merged,
@@ -282,17 +258,17 @@ merged <- FindClusters(
   merged,
   resolution = 0.3)
 
-message("#Vis UMAP\n")
-pdf("umap_harmony_sequencingBatch.pdf")
+#Vis UMAP
+pdf(file.path(opt$out_dir,"umap_harmony_sequencingBatch.pdf"))
 DimPlot(merged, reduction = "umap", group.by = "sequencingBatch")
 dev.off()
 
-pdf("umap_harmony_platformLocation.pdf")
+pdf(file.path(opt$out_dir,"umap_harmony_platformLocation.pdf"))
 DimPlot(merged, reduction = "umap", group.by = "platformLocation")
 dev.off()
 
-pdf("umap_harmony_is_AD.pdf")
-DimPlot(merged, reduction = "umap", group.by = "is_AD")
+pdf(file.path(opt$out_dir,"umap_harmony_is_AD.pdf"))
+DimPlot(merged, reduction = "umap", split.by = "is_AD")
 dev.off()
 
 #Finally 
@@ -300,12 +276,15 @@ dev.off()
 message("#Save output \n")
 saveRDS(merged, file = file.path(opt$out_dir, "merged_by_individual_harmony.rds"))
 
-message("#Save metadata \n")
+message("#Save metadata\n")
 write.csv(
   merged@meta.data,
   file = file.path(opt$out_dir, "merged_by_individual_harmony_cell_metadata.csv"),
   row.names = TRUE)
 
 message("#DONE. Saved in: ", opt$out_dir)
+end_time <- Sys.time()
+time_taken <- end_time - start_time
+message(print(time_taken))
 
-message("#THE END?")
+message("#THE END?\n")
