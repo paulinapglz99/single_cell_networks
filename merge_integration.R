@@ -12,7 +12,7 @@ if (!requireNamespace("optparse", quietly = FALSE)) install.packages("optparse",
 
 ok <- pacman::p_load("Seurat",
                      "tidyverse",
-                     "sctransform",
+                     #"sctransform",
                      "purrr",
                      "optparse",
                      "future",
@@ -32,7 +32,7 @@ option_list <- list(
   make_option(c("-s", "--seurat_list"), type = "character", help = "Path to QCed Seurat list (.rds)"),
   make_option(c("-a", "--assay_metadata"),type = "character", help = "Assay metadata CSV"),
   make_option(c("-c", "--clinical_metadata"), type = "character", help = "Clinical metadata CSV"),
-  make_option(c("-o", "--out_dir"), type = "character", default = "results_sct_integration", help = "Output directory [default: %default]"),
+  make_option(c("-o", "--out_dir"), type = "character", default = "results_merge_integration", help = "Output directory [default: %default]"),
   make_option(c("-w", "--workers"), type = "integer", default = 4, help = "Parallel workers [default: %default]"),
   make_option(c("--seed"),type = "integer", default = 42, help = "Random seed [default: %default]")
 )
@@ -58,6 +58,7 @@ options(future.globals.maxSize = 200 * 1024^3)
 opt$seurat_list <- "/STORAGE/csbig/sc_ADers/qc_out/matrices_demultiplexed_minimal-2025-11-05_15-09/seurat_list_filtered.rds"
 opt$assay_metadata <- "/STORAGE/csbig/sc_ADers/metadata/ROSMAP_assay_scrnaSeq_metadata.csv"
 opt$clinical_metadata <- "/STORAGE/csbig/sc_ADers/metadata/tables/clinical_stratified.csv"
+opt$out_dir <- "~/AD_single_cell/merge_integration_minimal_data"
 
 message("Loading Seurat list...")
 x <- readRDS(opt$seurat_list)
@@ -271,26 +272,17 @@ pdf("umap_harmony_is_AD.pdf")
 DimPlot(merged, reduction = "umap", group.by = "is_AD")
 dev.off()
 
-
-pdf("feature_plot_astrocytes.pdf")
-FeaturePlot(
-  merged,
-  features = c("GFAP", "AQP4"),  # Astrocytes
-  reduction = "umap"
-)
-dev.off()
-
-pdf("feature_plot_neurons.pdf")
-FeaturePlot(
-  merged,
-  features = c("RBFOX3", "MAP2"), # Neurons
-  reduction = "umap"
-)
-dev.off()
-
 #Finally 
 
 #Save output
-output_file <- file.path(outdir, "seurat_list_sctransform_normalized.rds")
-saveRDS(seurat_list_norm, file = output_file)
-message("#DONE. Saved in: ", output_file)
+saveRDS(merged, file = file.path(opt$out_dir, "merged_by_individual_harmony.rds"))
+
+#Save metadata
+write.csv(
+  merged@meta.data,
+  file = file.path(opt$out_dir, "merged_by_individual_harmony_cell_metadata.csv"),
+  row.names = TRUE)
+
+message("#DONE. Saved in: ", opt$out_dir)
+
+#THE END?
