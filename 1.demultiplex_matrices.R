@@ -23,14 +23,14 @@ if (is.null(opt$directory) | is.null(opt$metadata) | is.null(opt$output)) {
   stop("Mandatory arguments are missing: --directory, --metadata and/or --output", call. = FALSE)
 }
 
-# Parallel setup
+#Parallel setup
 message("#Parallel setup --- ---")
 set.seed(10)
 future::plan(multisession, workers = 10)
 
 message("#Set functions --- ---")
 
-# Demultiplexing function
+#Demultiplexing function
 demultiplex.f <- function(batch_name) {
   message("Reading and demultiplexing batch: ", batch_name)
   
@@ -59,19 +59,19 @@ demultiplex.f <- function(batch_name) {
   return(seurat_ind)
 }
 
-# Load demultiplex metadata
+#Load demultiplex metadata
 message("#Loading metadata --- ---")
 demultiplex.df <- vroom(opt$metadata) %>% as_tibble()
 
-# Get batch names
+#Get batch names
 matrix_files <- list.files(opt$directory, pattern = "\\.matrix\\.mtx\\.gz$", full.names = TRUE)
 batch_names <- str_replace(basename(matrix_files), "\\.matrix\\.mtx\\.gz$", "")
 if (opt$test) {
-  message("# Test mode active: running on one batch only --- ---")
+  message("#Test mode active: running on one batch only --- ---")
   batch_names <- batch_names[1]
 }
 
-# Run demultiplexing
+#Run demultiplexing
 message("#Running demultiplexing in parallel --- ---")
 list_seurat_ind <- future_map(
   batch_names,
@@ -85,7 +85,7 @@ list_seurat_ind <- future_map(
 )
 names(list_seurat_ind) <- batch_names
 
-# Flatten and save
+#Flatten and save
 message("#Flattening and saving --- ---")
 list_seurat_ind <- flatten(list_seurat_ind)
 saveRDS(list_seurat_ind, file = opt$output,  compress = "gzip")

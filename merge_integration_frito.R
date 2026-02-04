@@ -90,11 +90,11 @@ meta_by_specimen <- assay_metadata.df %>%
     sequencingBatch,
     libraryBatch,
     platformLocation,
-    RIN
-  ) %>%
+    RIN) %>%
   left_join(
     clinical_metadata.df,
-    by = "individualID")
+    by = "individualID") %>%
+  mutate(specimenID_Location = paste(specimenID, platformLocation, sep = "_"))
 
 valid_specimen_ids <- intersect(names(x),
                                 meta_by_specimen$specimenID)
@@ -105,24 +105,40 @@ message("Keeping ", length(valid_specimen_ids),
 #Filter only specimen ids with a valid 
 x <- x[valid_specimen_ids]
 
+name_map <- meta_by_specimen %>%
+  distinct(specimenID, platformLocation, specimenID_Location)
+
+new_names <- sapply(names(x), function(old_name) {
+  rows <- name_map %>% filter(specimenID == old_name)
+  
+  if (nrow(rows) != 1) {
+    stop("Ambiguous specimenID: ", old_name)
+  }
+  
+  rows$specimenID_Location
+})
+
+names(x) <- new_names
+
 message("#Add metadata \n")
 
 x <- setNames(
-  lapply(names(x), function(spec_id) {
+  lapply(names(x), function(id) {
     
-    seu <- x[[spec_id]]
+    seu <- x[[id]]
     
     meta_row <- meta_by_specimen %>%
-      filter(specimenID == spec_id)
+      filter(specimenID_Location == id)
     
     stopifnot(nrow(meta_row) == 1)
     
-    seu$specimenID       <- meta_row$specimenID
-    seu$individualID     <- meta_row$individualID
-    seu$sequencingBatch  <- meta_row$sequencingBatch
-    seu$libraryBatch     <- meta_row$libraryBatch
-    seu$platformLocation <- meta_row$platformLocation
-    seu$RIN              <- meta_row$RIN
+    seu$specimenID            <- meta_row$specimenID
+    seu$specimenID_Location   <- meta_row$specimenID_Location
+    seu$individualID          <- meta_row$individualID
+    seu$sequencingBatch       <- meta_row$sequencingBatch
+    seu$libraryBatch          <- meta_row$libraryBatch
+    seu$platformLocation      <- meta_row$platformLocation
+    seu$RIN                   <- meta_row$RIN
     
     seu$is_AD   <- meta_row$is_AD
     seu$cogdx   <- meta_row$cogdx
