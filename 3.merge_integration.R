@@ -57,7 +57,7 @@ options(future.globals.maxSize = 200 * 1024^3)
 
 #Just por ahora, comentar despues
 # 
-# opt$seurat_list <- "/STORAGE/csbig/matrices_demultiplexed_minimal_QC-2026-01-28_19-04/seurat_list_filtered.rds"
+# opt$seurat_list <- "/STORAGE/csbig/sc_ADers/matrices_demultiplexed_minimal_QC-2026-01-28_19-04/seurat_list_filtered.rds"
 # opt$assay_metadata <- "/STORAGE/csbig/sc_ADers/metadata/ROSMAP_assay_scrnaSeq_metadata.csv"
 # opt$clinical_metadata <- "/STORAGE/csbig/sc_ADers/metadata/tables/clinical_stratified.csv"
 # opt$out_dir <- "~/AD_single_cell/merge_integration_minimal_data_frito"
@@ -67,34 +67,36 @@ x <- readRDS(opt$seurat_list)
 #x <- x[1:5]
 
 message("Loading metadata...")
-assay_metadata.df    <- vroom::vroom(opt$assay_metadata) %>%  distinct()
+assay_metadata.df    <- vroom::vroom(opt$assay_metadata) %>% distinct()
 clinical_metadata.df <- vroom::vroom(opt$clinical_metadata) %>% 
   filter(!is.na(is_AD)) %>% distinct()
+#clinical_metadata.df <- vroom::vroom(opt$
 dim(assay_metadata.df)
 dim(clinical_metadata.df)
-#Add metadata to the Seurat object
 
+#Build the individual_ID by the specimenID in the assay metadata
 assay_metadata.df <- assay_metadata.df %>%
   mutate(individualID = stringr::str_extract(
     specimenID,
     "R[0-9]+$"))
 
+#Keep only individuals with clinical data (que ya filtramos para tener solo los que tienen fenotipo)
+
 assay_metadata.df <- assay_metadata.df %>%
   filter(individualID %in% clinical_metadata.df$individualID)
-dim(assay_metadata.df)
+
 #Metadata final por specimen
 meta_by_specimen <- assay_metadata.df %>%
   select(
     specimenID,
     individualID,
-    sequencingBatch,
-    libraryBatch,
-    platformLocation,
-    RIN) %>%
-  left_join(
-    clinical_metadata.df,
-    by = "individualID") %>%
-  mutate(specimenID_Location = paste(specimenID, platformLocation, sep = "_"))
+    libraryBatch) %>%
+left_join(
+  clinical_metadata.df,
+  by = "individualID") %>% 
+  distinct()
+
+#Filter to have the same metadata and object names
 
 valid_specimen_ids <- intersect(names(x),
                                 meta_by_specimen$specimenID)
@@ -102,25 +104,27 @@ valid_specimen_ids <- intersect(names(x),
 message("Keeping ", length(valid_specimen_ids),
         " / ", length(x),
         " Seurat objects")
+
 #Filter only specimen ids with a valid 
 x <- x[valid_specimen_ids]
+# 
+# #Change  names to identify platformLocation
+# name_map <- meta_by_specimen %>%
+#   distinct(specimenID, specimenID_Location)
+# 
+# new_names <- sapply(names(x), function(old_name) {
+#   rows <- name_map %>% filter(specimenID == old_name)
+# 
+#   if (nrow(rows) != 1) {
+#     stop("Ambiguous specimenID: ", old_name)
+#   }
+# 
+#   rows$specimenID_Location
+# })
+# 
+# names(x) <- new_names
 
-name_map <- meta_by_specimen %>%
-  distinct(specimenID, platformLocation, specimenID_Location)
-
-new_names <- sapply(names(x), function(old_name) {
-  rows <- name_map %>% filter(specimenID == old_name)
-  
-  if (nrow(rows) != 1) {
-    stop("Ambiguous specimenID: ", old_name)
-  }
-  
-  rows$specimenID_Location
-})
-
-names(x) <- new_names
-
-message("#Add metadata \n")
+message("#Add metadata to Seurat objects...\n")
 
 x <- setNames(
   lapply(names(x), function(id) {
@@ -128,17 +132,17 @@ x <- setNames(
     seu <- x[[id]]
     
     meta_row <- meta_by_specimen %>%
-      filter(specimenID_Location == id)
+      filter(specimenID == id)
     
     stopifnot(nrow(meta_row) == 1)
     
-    seu$specimenID            <- meta_row$specimenID
-    seu$specimenID_Location   <- meta_row$specimenID_Location
-    seu$individualID          <- meta_row$individualID
-    seu$sequencingBatch       <- meta_row$sequencingBatch
-    seu$libraryBatch          <- meta_row$libraryBatch
-    seu$platformLocation      <- meta_row$platformLocation
-    seu$RIN                   <- meta_row$RIN
+    # seu$specimenID            <- meta_row$specimenID
+    # seu$specimenID_Location   <- meta_row$specimenID_Location
+    # seu$individualID          <- meta_row$individualID
+    # seu$sequencingBatch       <- meta_row$sequencingBatch
+    # seu$libraryBatch          <- meta_row$libraryBatch
+    # seu$platformLocation      <- meta_row$platformLocation
+    # seu$RIN                   <- meta_row$RIN
     
     seu$is_AD   <- meta_row$is_AD
     seu$cogdx   <- meta_row$cogdx
@@ -193,10 +197,10 @@ x <- setNames(
 # #Check merged_by_individual. It's a list of Seurat objs, one per individual
 # length(merged_by_individual)
 
-#Merge everything lol
+message("#Merge everything")
 merged <- merge(x[[1]], x[-1])
 
-#Normalization
+message("#Normalization \n")
 
 DefaultAssay(merged) <- "RNA"
 merged <- NormalizeData(merged, verbose = FALSE)
@@ -222,17 +226,17 @@ merged <- RunUMAP(merged, reduction = "pca", dims = 1:30)
 
 #Vis UMAPs
 
-pdf(file.path(opt$out_dir,"umap_merged_individual_sequencingBatch_preintegration.pdf"))
+pdf(file.path(opt$out_dir,"umap_merged_individual_libraryBatch_preintegration.pdf"), width = 10, height = 10)
 DimPlot(merged,
         reduction = "umap",
-        group.by = "sequencingBatch")
+        group.by = "libraryBatch") + NoLegend()
 dev.off()
 
-pdf(file.path(opt$out_dir,"umap_merged_individual_platformLocation_preintegration.pdf"))
-DimPlot(merged,
-        reduction = "umap",
-        group.by = "platformLocation")
-dev.off()
+# pdf(file.path(opt$out_dir,"umap_merged_individual_platformLocation_preintegration.pdf"))
+# DimPlot(merged,
+#         reduction = "umap",
+#         group.by = "platformLocation")
+# dev.off()
 
 pdf(file.path(opt$out_dir,"umap_merged_individual_is_AD_preintegration.pdf"))
 DimPlot(merged,
@@ -242,11 +246,11 @@ dev.off()
 
 message("#Run harmony and check for batches \n")
 
-merged$sequencingBatch  <- factor(merged$sequencingBatch)
-merged$platformLocation <- factor(merged$platformLocation)
+merged$libraryBatch  <- factor(merged$libraryBatch)
+#merged$platformLocation <- factor(merged$platformLocation)
 
-batch_vars <- c("sequencingBatch"#,
-                #              "platformLocation"
+batch_vars <- c("libraryBatch"#,
+               # "platformLocation"
 )
 
 merged <- RunHarmony(
@@ -275,17 +279,23 @@ merged <- FindClusters(
   resolution = 0.3)
 
 #Vis UMAP
-pdf(file.path(opt$out_dir,"umap_harmony_sequencingBatch.pdf"))
-DimPlot(merged, reduction = "umap", group.by = "sequencingBatch")
+pdf(file.path(opt$out_dir,"umap_harmony_libraryBatch.pdf"),   width = 10,   # ancho en pulgadas
+    height = 8)
+DimPlot(merged, reduction = "umap", group.by = "libraryBatch") + NoLegend()
 dev.off()
-
-pdf(file.path(opt$out_dir,"umap_harmony_platformLocation.pdf"))
-DimPlot(merged, reduction = "umap", group.by = "platformLocation")
-dev.off()
+ 
+# pdf(file.path(opt$out_dir,"umap_harmony_platformLocation.pdf"))
+# DimPlot(merged, reduction = "umap", group.by = "platformLocation")
+# dev.off()
 
 pdf(file.path(opt$out_dir,"umap_harmony_is_AD.pdf"))
 DimPlot(merged, reduction = "umap", split.by = "is_AD")
 dev.off()
+
+pdf(file.path(opt$out_dir,"umap_harmony_is_AD_nosplit.pdf"))
+DimPlot(merged, reduction = "umap")
+dev.off()
+
 
 #Finally 
 
