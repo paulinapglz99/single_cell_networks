@@ -109,15 +109,18 @@ check_assay_layers <- function(obj, assay = "RNA") {
   TRUE
 }
 
+#3er helper
+# sum_presence_across ()
 
-#3er helper 
+
+
 sum_presence_across <- function(seurat_list) {
   # Sum gene presence (>0 counts) across samples without huge cbind
-  total <- integer(0); names(total) <- character(0)
-  for (nm in names(seurat_list)) {
-    m <- get_counts(seurat_list[[nm]])
-    v <- Matrix::rowSums(m > 0)
-    v <- as.integer(v); names(v) <- rownames(m)
+  total <- integer(0); names(total) <- character(0) # Start  of a empy vector  
+  for (nm in names(seurat_list)) { # each sample 
+    m <- get_counts(seurat_list[[nm]]) # extract the counts of each sample 
+    v <- Matrix::rowSums(m > 0) # boolean matrix , how many times the gene apear in a cell Trues and False
+    v <- as.integer(v); names(v) <- rownames(m) 
     if (length(total) == 0) {
       total <- v
     } else {
