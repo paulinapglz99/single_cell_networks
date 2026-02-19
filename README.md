@@ -23,12 +23,6 @@ Additional packages include: Harmony, scDblFinder, tidyverse, SingleCellExperime
 
 
 
-<img width="297" height="977" alt="Copy of worflow_for_git drawio" src="https://github.com/user-attachments/assets/26734d26-a5d2-492f-bdad-9f995c4e6ecf" />
-
-
-<img width="297" height="977" alt="Copy of worflow_for_git drawio (1)" src="https://github.com/user-attachments/assets/04de1780-3727-4214-ac59-ab841726c5fe" />
-
-
 <img width="297" height="977" alt="Copy of worflow_for_git drawio (2)" src="https://github.com/user-attachments/assets/4bc97aa7-22fe-488c-8b0b-4145c2861fa6" />
 
 
