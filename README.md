@@ -21,6 +21,10 @@ Additional packages include: Harmony, scDblFinder, tidyverse, SingleCellExperime
 <img width="292" height="980" alt="worflow_for_git drawio (3)" src="https://github.com/user-attachments/assets/381b0a3e-629b-43b7-9b70-c08ec0295a85" />
 
 
+
+
+<img width="297" height="977" alt="Copy of worflow_for_git drawio" src="https://github.com/user-attachments/assets/26734d26-a5d2-492f-bdad-9f995c4e6ecf" />
+
  ## Data Acquisition
 All data were obtained from Synapse with approved access.
 Study: ROSMAP – DLPFC Experiment 2
