@@ -181,6 +181,12 @@ Rscript ~/single_cell_networks/3.merge_integration.R -> Runs the merge + normali
 
 -c .../clinical_stratified.csv ->  Clinical metadata table (preprocessed/stratified). Used to append donor-level clinical covariates (e.g., diagnosis groups, demographics, etc.) to the merged object.
 
+-o .../merge_integration_results_feb10 -> Output directory where all integration results will be saved (final .rds, plots, exported metadata).
+
+-w 12  -> Number of workers/threads used for parallel steps
+
+
+
 
 
 
