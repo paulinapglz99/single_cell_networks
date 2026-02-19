@@ -17,8 +17,6 @@ Core library: Seurat
 Additional packages include: Harmony, scDblFinder, tidyverse, SingleCellExperiment, etc 
 
 
-<img width="299" height="711" alt="image" src="https://github.com/user-attachments/assets/33c2a2bd-0b9b-4c15-8074-17e10800c377" />
-
  ## Data Acquisition
 All data were obtained from Synapse with approved access.
 Study: ROSMAP – DLPFC Experiment 2
