@@ -1,18 +1,13 @@
 # Single cell networks repository 
 
-This repository implements a reproducible pipeline for single-cell RNA               <img width="292" height="980" alt="worflow_for_git drawio                                                                                       (2)" src="https://github.com/user-              attachments/assets/c3208a96-7ff1-4a66-9b68-1e3ad378d16d" />
-
-sequencing (scRNA-seq) analysis, following current best practices for 
+This repository implements a reproducible pipeline for single-cell RNA sequencing (scRNA-seq) analysis, following current best practices for 
 single-cell preprocessing as described in Luecken & Theis (2019).
+
 The primary objectives of this project are:
-
-To perform standardized preprocessing of single-cell data, including metadata 
-harmonization, demultiplexing, quality control, normalization, integration,
-and cell annotation.
+To perform standardized preprocessing of single-cell data, including metadata  harmonization, demultiplexing, quality control, normalization, integration, and cell annotation.
 
 
-To construct gene co-expression networks from processed single-cell data
-for downstream biological analysis.
+To construct gene co-expression networks from processed single-cell data for downstream biological analysis.
 
 
 Language: R
