@@ -1,6 +1,6 @@
 #QC with all metrics 
 
-#Args
+#Args , examples 
 
 args <- commandArgs(trailingOnly = TRUE)
 
@@ -29,7 +29,7 @@ msg <- function(...) {
 
 msg("# Packages loaded")
 
-#Parameters 
+#Parameters (You can change the parameters) 
 min_feat       <- 700L     # min nFeature_RNA per cell 
 min_count      <- 1500L    # min nCount_RNA per cell  
 mt_max         <- 13       # max percent.mt per cell  
@@ -37,7 +37,7 @@ min_gene_cells <- 10L      # min cells across all samples to keep a gene
 run_doublets   <- TRUE     # run scDblFinder
 mt_pattern     <- "^MT-"   # human: "^MT-" ; mouse: "^mt-"
 
-# Output folder
+# Output folder with timestamp 
 stamp  <- format(Sys.time(), "%Y-%m-%d_%H-%M")
 base   <- tools::file_path_sans_ext(basename(input_path))
 
@@ -46,6 +46,7 @@ outdir <- file.path(base_outdir, paste0(base, "-", stamp))
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 msg("# Outdir (PWD): ", normalizePath(outdir, winslash = "/", mustWork = FALSE))
 
+#Messages 
 msg("# QC run started")
 msg("# Input: ", input_path)
 msg("# Outdir: ", outdir)
@@ -55,32 +56,61 @@ msg("# Doublets: ", run_doublets)
 msg("# MT pattern: ", mt_pattern)
 
 # Helpers
+## 1st helper:
+# get_counts():
+# Extracts the raw counts matrix from a Seurat object in a version-robust way.
+# Ensures compatibility between Seurat v4 (slot-based storage) and
+# Seurat v5 (layer-based storage). Always returns the raw counts
+# matrix (genes × cells) for downstream QC steps.
+
 get_counts <- function(obj, assay = "RNA") {
-  # Robustly get counts (Seurat v5 layers-friendly)
-  if (assay %in% names(obj@assays)) {
-    a <- obj[[assay]]
-    if (!is.null(a@layers) && "counts" %in% names(a@layers)) {
-      return(GetAssayData(obj, assay = assay, layer = "counts"))
+  
+  # Check that the requested assay exists in the Seurat object
+  if (assay %in% names(obj@assays)) { 
+    a <- obj[[assay]] # extract assay 
+      # If using Seurat v5 and raw counts are stored in layers
+    if (!is.null(a@layers) && "counts" %in% names(a@layers)) { 
+      # Retrieve raw counts from the "counts" layer
+      return(GetAssayData(obj, assay = assay, layer = "counts")) 
     } else {
-      return(GetAssayData(obj, assay = assay, slot = "counts"))
+      # Fallback to legacy Seurat structure (v4) and extract counts from slot
+      return(GetAssayData(obj, assay = assay, slot = "counts"))  
     }
-  } else stop("Assay not found: ", assay)
+    # Stop execution if the assay does not exist
+  } else stop("Assay not found: ", assay) # Stop execution if the assay does not exist
 }
 
+## 2nd helper : 
+#check_assay_layers()
+# This function validates the structural integrity of a given assay
+# (default: RNA) within a Seurat object. It ensures that:
+#   1) The assay exists,
+#   2) The assay contains defined layers (Seurat v5 structure),
+#   3) Each layer is a valid 2D matrix-like object (genes × cells).
+#
+# The function returns TRUE if all checks pass, otherwise FALSE.
+# It is used to detect corrupted or improperly structured Seurat objects
+# before running downstream QC steps.
+  
 check_assay_layers <- function(obj, assay = "RNA") {
-  # Ensure assay layers are proper 2D matrices
-  if (!assay %in% names(obj@assays)) return(FALSE)
-  a <- obj[[assay]]
-  ln <- names(a@layers)
-  if (length(ln) == 0) return(FALSE)
-  for (ly in ln) {
+
+  # Assay exists in the Seurat object?
+  if (!assay %in% names(obj@assays)) return(FALSE) 
+  a <- obj[[assay]]  # Extract assay
+  ln <- names(a@layers) # Layer names (Seurat v5)
+  # The assay must contain at least one defined layer
+  if (length(ln) == 0) return(FALSE) 
+   # Check each layer is a valid 2D matrix
+  for (ly in ln) {  #over each layer to validate its structure
     L <- a@layers[[ly]]
-    if (!(is.matrix(L) || inherits(L, "Matrix"))) return(FALSE)
-    if (length(dim(L)) != 2) return(FALSE)
+    if (!(is.matrix(L) || inherits(L, "Matrix"))) return(FALSE) # Each layer must be either: a base R matrix, or a sparse Matrix object  
+    if (length(dim(L)) != 2) return(FALSE) # Ensure the layer has exactly two dimensions:(genes × cells)
   }
   TRUE
 }
 
+
+#3er helper 
 sum_presence_across <- function(seurat_list) {
   # Sum gene presence (>0 counts) across samples without huge cbind
   total <- integer(0); names(total) <- character(0)
@@ -215,6 +245,8 @@ qc_pre_summary <- qc_cells_pre %>%
 
 readr::write_csv(qc_pre_summary, file.path(outdir, "qc_pre_summary.csv"))
 
+## Start the classic filters 
+                      
 # 1) counts/filter
 msg("# Cell filtering (first pass): nFeature >= ", min_feat, " AND nCount >= ", min_count)
 pre_cells <- vapply(seurat_list, ncol, numeric(1))
@@ -279,7 +311,7 @@ if (isTRUE(run_doublets)) {
   seurat_list <- setNames(lapply(dbl_list, `[[`, "obj"), sapply(dbl_list, `[[`, "name"))
   
   
-  # Csv cell doublet calls for plotting later
+  # Csv cell doublet calls for plotting later for the reports 
   
   dbl_cells <- dplyr::bind_rows(lapply(dbl_list, function(x) {
     if (is.null(x$dbl_meta)) return(NULL)
