@@ -30,7 +30,7 @@ single-cell preprocessing as described in Luecken &amp; Theis (2019).
     </td>
     <td width="45%" align="center" valign="top">
 
-<img width="50%" alt="Copy of worflow_for_git drawio (2)"
+<img width="40%" alt="Copy of worflow_for_git drawio (2)"
      src="https://github.com/user-attachments/assets/4bc97aa7-22fe-488c-8b0b-4145c2861fa6" />
 
     </td>
