@@ -75,7 +75,7 @@ cellBarcode + libraryBatch → individualID
 - Output file  : matrices_demultiplexed_final.rds  -> A flattened list of Seurat objects, where each element corresponds to an individual donor within a given library batch (named as libraryBatch_individualID).
 
 ### How to run 
-- bash run_1.demultiplex.sh
+- Command : bash run_1.demultiplex.sh
   
 Rscript .../CopyOf1.demultiplex_matrices.R -> Runs the demultiplexing R script
 
@@ -117,6 +117,14 @@ qc_summary_cells_sequential.csv — total cell counts retained after each QC ste
 
 QC thresholds (current defaults): Cells are retained if they have at least 700 detected genes (nFeature_RNA ≥ 700) and 1500 UMIs (nCount_RNA ≥ 1500), with a maximum mitochondrial content of 13% (percent.mt ≤ 13). Genes are kept only if detected in at least 10 cells across the dataset. Doublet detection is enabled by default using scDblFinder, and mitochondrial genes are identified using the human gene prefix pattern "^MT-".
 
+### How to run 
+Command : bash run_2.quality_control.sh
+
+Rscript ~/single_cell_networks/2.quality_control.R -> Runs the QC script.
+
+/STORAGE/csbig/sc_ADers/matrices_demultiplexed_final.rds -> (input): path to the demultiplexed Seurat list produced in demultiplexing step. 
+
+
 
 ## QC Plots
 Script : 2.1.qc_plots.R
@@ -136,6 +144,15 @@ Multiple QC plots saved in PNG and JPG
 A combined PDF report:
  QC_all_plots_2perpage.pdf
 
+### How to run 
+Command : bash run_2.1_qc_plots.sh
+
+Rscript ~/single_cell_networks/2.1.qc_plots.R -> Runs the plotting script.
+
+/STORAGE/.../matrices_demultiplexed_final_QC-2026-01-28_19-55  -> (input): the QC output folder generated in Step 2. The script expects QC summary tables inside this folder and will create plots accordingly.
+
+ 
+
 ## Normalization, Merge, and Integration
 
 Script : 3.merge_integration.R
@@ -152,3 +169,22 @@ Normalization method: Seurat NormalizeData() (log-normalization).
 
 
 Batch correction: Harmony integration on libraryBatch (other variables like platformLocation can be added if needed).
+
+### How to run 
+Command : bash run_3.merge_integration.sh
+
+Rscript ~/single_cell_networks/3.merge_integration.R -> Runs the merge + normalization + Harmony integration script.
+
+-s .../seurat_list_filtered.rds -> (input) : QC-filtered Seurat list produced by qc , This is the main object list that will be merged and integrated. 
+
+-a .../ROSMAP_assay_scrnaSeq_metadata.csv ->  assay-level metadata. Used to attach/validate experiment-level variables (e.g., library batch, sequencing batch, center/platform).
+
+-c .../clinical_stratified.csv ->  Clinical metadata table (preprocessed/stratified). Used to append donor-level clinical covariates (e.g., diagnosis groups, demographics, etc.) to the merged object.
+
+
+
+
+
+
+
+
