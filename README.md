@@ -78,9 +78,13 @@ cellBarcode + libraryBatch → individualID
 - bash run_1.demultiplex.sh
   
 Rscript .../CopyOf1.demultiplex_matrices.R -> Runs the demultiplexing R script
+
 -directory /datos/rosmap/single_cell/matrix_exp_2/ -> Path to the folder containing the input count matrices downloaded from Synapse (Experiment 2).
+
 --metadata .../ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv -> Path to the demultiplexing mapping file. This file provides the key mapping: cellBarcode + libraryBatch → individualID.
+
 --output .../matrices_demultiplexed_proof.rds -> Output path for the generated .rds object.
+
 --test -> Runs the script in test mode (typically used to run a smaller subset / quick validation).
 
 
