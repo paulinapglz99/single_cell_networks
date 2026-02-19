@@ -74,6 +74,7 @@ cellBarcode + libraryBatch → individualID
 
 - Output file  : matrices_demultiplexed_final.rds  -> A flattened list of Seurat objects, where each element corresponds to an individual donor within a given library batch (named as libraryBatch_individualID).
 
+### How to run
 
 
 ## Quality control 
