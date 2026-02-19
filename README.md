@@ -118,7 +118,7 @@ qc_summary_cells_sequential.csv — total cell counts retained after each QC ste
 QC thresholds (current defaults): Cells are retained if they have at least 700 detected genes (nFeature_RNA ≥ 700) and 1500 UMIs (nCount_RNA ≥ 1500), with a maximum mitochondrial content of 13% (percent.mt ≤ 13). Genes are kept only if detected in at least 10 cells across the dataset. Doublet detection is enabled by default using scDblFinder, and mitochondrial genes are identified using the human gene prefix pattern "^MT-".
 
 ### How to run 
-Command : bash run_2.quality_control.sh
+- Command : bash run_2.quality_control.sh
 
 Rscript ~/single_cell_networks/2.quality_control.R -> Runs the QC script.
 
@@ -145,7 +145,7 @@ A combined PDF report:
  QC_all_plots_2perpage.pdf
 
 ### How to run 
-Command : bash run_2.1_qc_plots.sh
+- Command : bash run_2.1_qc_plots.sh
 
 Rscript ~/single_cell_networks/2.1.qc_plots.R -> Runs the plotting script.
 
@@ -171,7 +171,7 @@ Normalization method: Seurat NormalizeData() (log-normalization).
 Batch correction: Harmony integration on libraryBatch (other variables like platformLocation can be added if needed).
 
 ### How to run 
-Command : bash run_3.merge_integration.sh
+- Command : bash run_3.merge_integration.sh
 
 Rscript ~/single_cell_networks/3.merge_integration.R -> Runs the merge + normalization + Harmony integration script.
 
