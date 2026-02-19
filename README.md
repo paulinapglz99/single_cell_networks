@@ -1,3 +1,58 @@
+<table>
+  <tr>
+    <td width="50%" valign="top">
+
+## Single cell networks repository
+
+This repository implements a reproducible pipeline for single-cell RNA sequencing (scRNA-seq) analysis, following current best practices for single-cell preprocessing as described in Luecken & Theis (2019).
+
+### Objectives
+
+- Standardized preprocessing of single-cell data:
+  - Metadata harmonization
+  - Demultiplexing
+  - Quality control
+  - Normalization
+  - Integration
+  - Cell annotation
+
+- Construction of gene co-expression networks from processed single-cell data.
+
+**Language:** R  
+**Core library:** Seurat  
+**Additional packages:** Harmony, scDblFinder, tidyverse, SingleCellExperiment, etc.
+
+    </td>
+    <td width="50%" align="center">
+
+<img src="https://github.com/user-attachments/assets/4bc97aa7-22fe-488c-8b0b-4145c2861fa6" width="100%"/>
+
+    </td>
+  </tr>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Single cell networks repository 
 
 This repository implements a reproducible pipeline for single-cell RNA sequencing (scRNA-seq) analysis, following current best practices for 
