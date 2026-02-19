@@ -18,10 +18,6 @@ Core library: Seurat
 
 Additional packages include: Harmony, scDblFinder, tidyverse, SingleCellExperiment, etc 
 
-<img width="292" height="980" alt="worflow_for_git drawio (3)" src="https://github.com/user-attachments/assets/381b0a3e-629b-43b7-9b70-c08ec0295a85" />
-
-
-
 
 <img width="297" height="977" alt="Copy of worflow_for_git drawio (2)" src="https://github.com/user-attachments/assets/4bc97aa7-22fe-488c-8b0b-4145c2861fa6" />
 
