@@ -1,313 +1,350 @@
-<!-- ===================== HEADER (50/50) ===================== -->
-<table>
-  <tr>
-    <td width="55%" valign="top">
 
-<h1>Single cell networks repository</h1>
 
-<p>
-This repository implements a reproducible pipeline for single-cell RNA sequencing (scRNA-seq) analysis, following current best practices for
-single-cell preprocessing as described in Luecken &amp; Theis (2019).
-</p>
+# Single cell networks repository 
 
-<p><b>The primary objectives of this project are:</b></p>
+This repository implements a reproducible pipeline for single-cell RNA sequencing (scRNA-seq) analysis, following current best practices for single-cell preprocessing as described in Luecken & Theis (2019).
+The primary objectives of this project are:
+To perform standardized preprocessing of single-cell data, including metadata harmonization, demultiplexing, quality control, normalization, integration, and cell annotation.
 
-<ul>
-  <li>
-    To perform standardized preprocessing of single-cell data, including metadata harmonization, demultiplexing, quality control, normalization, integration, and cell annotation.
-  </li>
-  <li>
-    To construct gene co-expression networks from processed single-cell data for downstream biological analysis.
-  </li>
-</ul>
 
-<p>
-<b>Language:</b> R<br/>
-<b>Core library:</b> Seurat<br/>
-<b>Additional packages include:</b> Harmony, scDblFinder, tidyverse, SingleCellExperiment, etc
-</p>
+To construct gene co-expression networks from processed single-cell data for downstream biological analysis.
 
-    </td>
-    <td width="45%" align="center" valign="top">
 
-<img width="40%" alt="Copy of worflow_for_git drawio (2)"
-     src="https://github.com/user-attachments/assets/4bc97aa7-22fe-488c-8b0b-4145c2861fa6" />
+Language: R
 
-    </td>
-  </tr>
-</table>
 
-<hr/>
+Core library: Seurat
 
-<!-- ===================== DATA ACQUISITION ===================== -->
-<h2>Data Acquisition</h2>
 
-<p>All data were obtained from Synapse with approved access.</p>
+Additional packages include: Harmony, scDblFinder, tidyverse, SingleCellExperiment, etc 
 
-<p>
-<b>Study:</b> ROSMAP – DLPFC Experiment 2<br/>
-<b>Two types of data were available on Synapse:</b>
-</p>
+ ## Data Acquisition
+All data were obtained from Synapse with approved access.
+Study: ROSMAP – DLPFC Experiment 2
+Two types of data were available on Synapse:
+Raw FASTQ files
 
-<ul>
-  <li>Raw FASTQ files</li>
-  <li>Processed count matrices - <code>syn3157322</code></li>
-</ul>
 
-<h3>Metadata Files</h3>
+Processed count matrices - syn3157322
 
-<p>The following metadata files were downloaded from Synapse: <code>syn3157322</code></p>
 
-<ul>
-  <li>ROSMAP_clinical.csv</li>
-  <li>ROSMAP_biospecimen_metadata.csv</li>
-  <li>ROSMAP_assay_scrnaSeq_metadata.csv</li>
-  <li>ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv</li>
-</ul>
 
-<hr/>
+Metadata Files
+The following metadata files were downloaded from Synapse: syn3157322
 
-<!-- ===================== DEMULTIPLEXING ===================== -->
-<h2>Demultiplexing</h2>
+ROSMAP_clinical.csv
 
-<p><b>Script :</b> <code>1.demultiplex_matrices.R</code></p>
 
-<p>
-<b>Background: why demultiplexing is required in ROSMAP (DLPFC Experiment 2) :</b>
-In this dataset, most count matrices correspond to pooled libraries, meaning that a single matrix contains cells from multiple donors.
-</p>
+ROSMAP_biospecimen_metadata.csv
 
-<p>Libraries were generated from pooled samples as follows:</p>
 
-<ul>
-  <li>222 libraries include 8 donors</li>
-  <li>4 libraries include 7 donors</li>
-  <li>8 libraries include a single donor</li>
-</ul>
+ROSMAP_assay_scrnaSeq_metadata.csv
 
-<p><b>Additionally:</b></p>
-<ul>
-  <li>Most pooled libraries were prepared as two replicate library preparations (e.g., B10-A and B10-B).</li>
-  <li>Each replicate library was sequenced at two different sequencing centers (Broad and NYGC).</li>
-</ul>
 
-<p>Therefore, a library batch (e.g., B10) can produce four sequencing datasets:</p>
+ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv
 
-<ul>
-  <li>B10-A-Broad, B10-A-NYGC, B10-B-Broad, and B10-B-NYGC.</li>
-</ul>
 
-<p>Because each pooled matrix contains multiple donors, we must assign each cell barcode to its donor before any other process.</p>
+## Demultiplexing 
+Script : 1.demultiplex_matrices.R
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <h3>Input</h3>
-      <ul>
-        <li>Input : count matrices (<code>syn3157322</code>)</li>
-      </ul>
+Background: why demultiplexing is required in ROSMAP (DLPFC Experiment 2) : In this dataset, most count matrices correspond to pooled libraries, meaning that a single matrix contains cells from multiple donors.
+ Libraries were generated from pooled samples as follows: 222 libraries include 8 donors, 4 libraries include 7 donors, and 8 libraries include a single donor.
+Additionally:
+Most pooled libraries were prepared as two replicate library preparations (e.g., B10-A and B10-B).
 
-      <p>To do this, we use the demultiplexing mapping file:</p>
-      <p><code>ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv (syn34572333)</code></p>
 
-      <p>This file links:</p>
-      <p><code>cellBarcode + libraryBatch → individualID</code></p>
+Each replicate library was sequenced at two different sequencing centers (Broad and NYGC).
 
-      <ul>
-        <li>Input : count matrices (<code>syn3157322</code>)</li>
-      </ul>
-    </td>
 
-    <td width="50%" valign="top">
-      <h3>Output</h3>
-      <p>
-        Output file : <code>matrices_demultiplexed_final.rds</code>
-        → A flattened list of Seurat objects, where each element corresponds to an individual donor within a given library batch (named as <code>libraryBatch_individualID</code>).
-      </p>
+Therefore, a library batch (e.g., B10) can produce four sequencing datasets:
+ B10-A-Broad, B10-A-NYGC, B10-B-Broad, and B10-B-NYGC.
 
-      <h3>How to run</h3>
-      <p><b>Command :</b> <code>bash run_1.demultiplex.sh</code></p>
 
-      <p><code>Rscript .../CopyOf1.demultiplex_matrices.R</code> -> Runs the demultiplexing R script</p>
+Because each pooled matrix contains multiple donors, we must assign each cell barcode to its donor before any other process.
 
-      <ul>
-        <li><code>-directory /datos/rosmap/single_cell/matrix_exp_2/</code> -> Path to the folder containing the input count matrices downloaded from Synapse (Experiment 2).</li>
-        <li><code>--metadata .../ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv</code> -> Path to the demultiplexing mapping file. This file provides the key mapping: cellBarcode + libraryBatch → individualID.</li>
-        <li><code>--output .../matrices_demultiplexed_proof.rds</code> -> Output path for the generated .rds object.</li>
-        <li><code>--test</code> -> Runs the script in test mode (typically used to run a smaller subset / quick validation).</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+Input : count matrices (syn3157322) 
 
-<hr/>
 
-<!-- ===================== QUALITY CONTROL ===================== -->
-<h2>Quality control</h2>
+To do this, we use the demultiplexing mapping file:
+ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv (syn34572333)
 
-<p><b>Script :</b> <code>2.quality_control.R</code></p>
 
-<p>
-Make structural integrity validation of the input Seurat objects (Seurat v5 layers-aware), ensuring the data are readable, consistent, and properly annotated before filtering.
-</p>
+This file links:
+cellBarcode + libraryBatch → individualID
 
-<p>
+- Input : count matrices (syn3157322) 
+
+- Output file  : matrices_demultiplexed_final.rds  -> A flattened list of Seurat objects, where each element corresponds to an individual donor within a given library batch (named as libraryBatch_individualID).
+
+
+
+## Quality control 
+
+Script : 2.quality_control.R 
+
+Make  structural integrity validation of the input Seurat objects (Seurat v5 layers-aware), ensuring the data are readable, consistent, and properly annotated before filtering.
+
+
 Perform standardized, multi-metric quality control on demultiplexed Seurat objects to remove low-quality cells, lowly detected genes, and predicted doublets before normalization/integration.
-</p>
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <h3>Input</h3>
-      <ul>
-        <li>Input - A list of Seurat objects -> <code>matrices_demultiplexed_final.rds</code></li>
-      </ul>
-    </td>
-    <td width="50%" valign="top">
-      <h3>Output</h3>
-      <p>A timestamped output folder created in the current working directory:</p>
-      <pre><code>&lt;INPUT_BASENAME&gt;-YYYY-MM-DD_HH-MM/</code></pre>
+- Input - A list of Seurat objects -> matrices_demultiplexed_final.rds
 
-      <p><b>Main outputs include:</b></p>
-      <ul>
-        <li><code>seurat_list_filtered.rds</code> — filtered Seurat object list (ready for normalization/integration)</li>
-        <li><code>damaged_samples.txt</code> — samples dropped due to structural issues (invalid assay layers or missing QC metrics)</li>
-        <li><code>qc_cells_pre.csv</code> — per-cell QC metrics before filtering</li>
-        <li><code>qc_pre_summary.csv</code> — per-sample summary statistics before filtering</li>
-        <li><code>doublet_cells.csv</code> — per-cell scDblFinder calls</li>
-        <li><code>doublet_summary.csv</code> — per-sample doublet rate summary</li>
-        <li><code>qc_post_summary.csv</code> — per-sample summary after QC filtering</li>
-        <li><code>qc_summary_cells_sequential.csv</code> — total cell counts retained after each QC step</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+- Output
+A timestamped output folder created in the current working directory:
 
-<p>
-<b>QC thresholds (current defaults):</b>
-Cells are retained if they have at least 700 detected genes (nFeature_RNA ≥ 700) and 1500 UMIs (nCount_RNA ≥ 1500), with a maximum mitochondrial content of 13% (percent.mt ≤ 13).
-Genes are kept only if detected in at least 10 cells across the dataset.
-Doublet detection is enabled by default using scDblFinder, and mitochondrial genes are identified using the human gene prefix pattern "^MT-".
-</p>
+<INPUT_BASENAME>-YYYY-MM-DD_HH-MM/
 
-<h3>How to run</h3>
-<ul>
-  <li>Command : <code>bash run_2.quality_control.sh</code></li>
-</ul>
+Main outputs include:
+seurat_list_filtered.rds — filtered Seurat object list (ready for normalization/integration)
+damaged_samples.txt — samples dropped due to structural issues (invalid assay layers or missing QC metrics)
+qc_cells_pre.csv — per-cell QC metrics before filtering
+qc_pre_summary.csv — per-sample summary statistics before filtering
+doublet_cells.csv — per-cell scDblFinder calls 
+doublet_summary.csv — per-sample doublet rate summary 
+qc_post_summary.csv — per-sample summary after QC filtering
+qc_summary_cells_sequential.csv — total cell counts retained after each QC step
 
-<p><code>Rscript ~/single_cell_networks/2.quality_control.R</code> -> Runs the QC script.</p>
-<p><code>/STORAGE/csbig/sc_ADers/matrices_demultiplexed_final.rds</code> -> (input): path to the demultiplexed Seurat list produced in demultiplexing step.</p>
 
-<hr/>
+QC thresholds (current defaults): Cells are retained if they have at least 700 detected genes (nFeature_RNA ≥ 700) and 1500 UMIs (nCount_RNA ≥ 1500), with a maximum mitochondrial content of 13% (percent.mt ≤ 13). Genes are kept only if detected in at least 10 cells across the dataset. Doublet detection is enabled by default using scDblFinder, and mitochondrial genes are identified using the human gene prefix pattern "^MT-".
 
-<!-- ===================== QC PLOTS ===================== -->
-<h2>QC Plots</h2>
 
-<p><b>Script :</b> <code>2.1.qc_plots.R</code></p>
+## QC Plots
+Script : 2.1.qc_plots.R
 
-<p>
-This script takes as input the QC run output directory (the folder created by 2.quality_control.R) and reads the summary tables generated during QC .
-Using these files, it produces a complete set of QC plots to evaluate filtering thresholds and sample-level quality.
-</p>
+This script takes as input the QC run output directory (the folder created by 2.quality_control.R) and reads the summary tables generated during QC . Using these files, it produces a complete set of QC plots to evaluate filtering thresholds and sample-level quality.
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <h3>Input</h3>
-      <p>A QC output folder created in Step 2, for example:</p>
-      <pre><code>matrices_demultiplexed_final-YYYY-MM-DD_HH-MM/</code></pre>
-    </td>
+- Input
+A QC output folder created in Step 2, for example:
+matrices_demultiplexed_final-YYYY-MM-DD_HH-MM/
+- Output
+A plots directory automatically created at:
+qc_plots_cowplot_style/<QC_RUN_FOLDER_NAME>/
 
-    <td width="50%" valign="top">
-      <h3>Output</h3>
-      <p>A plots directory automatically created at:</p>
-      <pre><code>qc_plots_cowplot_style/&lt;QC_RUN_FOLDER_NAME&gt;/</code></pre>
+This folder contains:
+Multiple QC plots saved in PNG and JPG
 
-      <p>This folder contains:</p>
-      <ul>
-        <li>Multiple QC plots saved in PNG and JPG</li>
-      </ul>
+A combined PDF report:
+ QC_all_plots_2perpage.pdf
 
-      <p>A combined PDF report:</p>
-      <ul>
-        <li><code>QC_all_plots_2perpage.pdf</code></li>
-      </ul>
-    </td>
-  </tr>
-</table>
+## Normalization, Merge, and Integration
 
-<h3>How to run</h3>
-<ul>
-  <li>Command : <code>bash run_2.1_qc_plots.sh</code></li>
-</ul>
+Script : 3.merge_integration.R
 
-<p><code>Rscript ~/single_cell_networks/2.1.qc_plots.R</code> -> Runs the plotting script.</p>
+Merge QC-filtered Seurat objects, perform standard log-normalization, and integrate the dataset while correcting batch effects using Harmony. This step generates an integrated embedding (UMAP), clustering results, and a final merged Seurat object 
 
-<p>
-<code>/STORAGE/.../matrices_demultiplexed_final_QC-2026-01-28_19-55</code>
--> (input): the QC output folder generated in Step 2. The script expects QC summary tables inside this folder and will create plots accordingly.
-</p>
+Input :seurat_list_filtered.rds (output from Step 2: QC-filtered Seurat object list)
 
-<hr/>
+ROSMAP_assay_scrnaSeq_metadata.csv, clinical_stratified.csv 
+- Output -> An output directory (set by --out_dir) containing:,  merged_by_individual_harmony.rds :  Final integrated Seurat object (Harmony-corrected) , merged_by_individual_harmony_cell_metadata.csv, Cell-level metadata from the final object, UMAPs and graphics
 
-<!-- ===================== NORMALIZATION / MERGE / INTEGRATION ===================== -->
-<h2>Normalization, Merge, and Integration</h2>
+Notes
+Normalization method: Seurat NormalizeData() (log-normalization).
 
-<p><b>Script :</b> <code>3.merge_integration.R</code></p>
 
-<p>
-Merge QC-filtered Seurat objects, perform standard log-normalization, and integrate the dataset while correcting batch effects using Harmony.
-This step generates an integrated embedding (UMAP), clustering results, and a final merged Seurat object
-</p>
+Batch correction: Harmony integration on libraryBatch (other variables like platformLocation can be added if needed).
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <h3>Input</h3>
-      <p><b>Input :</b> <code>seurat_list_filtered.rds</code> (output from Step 2: QC-filtered Seurat object list)</p>
-      <p>ROSMAP_assay_scrnaSeq_metadata.csv, clinical_stratified.csv</p>
-    </td>
+##################################################################
+######################
+###########
 
-    <td width="50%" valign="top">
-      <h3>Output</h3>
-      <p>
-        An output directory (set by <code>--out_dir</code>) containing:
-      </p>
-      <ul>
-        <li><code>merged_by_individual_harmony.rds</code> : Final integrated Seurat object (Harmony-corrected)</li>
-        <li><code>merged_by_individual_harmony_cell_metadata.csv</code>, Cell-level metadata from the final object</li>
-        <li>UMAPs and graphics</li>
-      </ul>
-    </td>
-  </tr>
-</table>
-
-<h3>Notes</h3>
-<ul>
-  <li>Normalization method: Seurat NormalizeData() (log-normalization).</li>
-  <li>Batch correction: Harmony integration on libraryBatch (other variables like platformLocation can be added if needed).</li>
-</ul>
-
-<h3>How to run</h3>
-<ul>
-  <li>Command : <code>bash run_3.merge_integration.sh</code></li>
-</ul>
-
-<p><code>Rscript ~/single_cell_networks/3.merge_integration.R</code> -> Runs the merge + normalization + Harmony integration script.</p>
-
-<ul>
-  <li><code>-s .../seurat_list_filtered.rds</code> -> (input) : QC-filtered Seurat list produced by qc , This is the main object list that will be merged and integrated.</li>
-  <li><code>-a .../ROSMAP_assay_scrnaSeq_metadata.csv</code> -> assay-level metadata. Used to attach/validate experiment-level variables (e.g., library batch, sequencing batch, center/platform).</li>
-  <li><code>-c .../clinical_stratified.csv</code> -> Clinical metadata table (preprocessed/stratified). Used to append donor-level clinical covariates (e.g., diagnosis groups, demographics, etc.) to the merged object.</li>
-  <li><code>-o .../merge_integration_results_feb10</code> -> Output directory where all integration results will be saved (final .rds, plots, exported metadata).</li>
-  <li><code>-w 12</code> -> Number of workers/threads used for parallel steps</li>
-</ul>
+######
+### THE LAST
 
 
 
+# Single cell networks repository 
+
+This repository implements a reproducible pipeline for single-cell RNA sequencing (scRNA-seq) analysis, following current best practices for 
+single-cell preprocessing as described in Luecken & Theis (2019).
+
+The primary objectives of this project are:
+To perform standardized preprocessing of single-cell data, including metadata  harmonization, demultiplexing, quality control, normalization, integration, and cell annotation.
+
+
+To construct gene co-expression networks from processed single-cell data for downstream biological analysis.
+
+
+Language: R
+
+
+Core library: Seurat
+
+
+Additional packages include: Harmony, scDblFinder, tidyverse, SingleCellExperiment, etc 
+
+
+<img width="297" height="977" alt="Copy of worflow_for_git drawio (2)" src="https://github.com/user-attachments/assets/4bc97aa7-22fe-488c-8b0b-4145c2861fa6" />
+
+
+ 
+ ## Data Acquisition
+All data were obtained from Synapse with approved access.
+Study: ROSMAP – DLPFC Experiment 2
+Two types of data were available on Synapse:
+Raw FASTQ files
+
+
+Processed count matrices - syn3157322
 
 
 
+Metadata Files
+The following metadata files were downloaded from Synapse: syn3157322
+
+ROSMAP_clinical.csv
+
+
+ROSMAP_biospecimen_metadata.csv
+
+
+ROSMAP_assay_scrnaSeq_metadata.csv
+
+
+ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv
+
+
+## Demultiplexing 
+Script : 1.demultiplex_matrices.R
+
+Background: why demultiplexing is required in ROSMAP (DLPFC Experiment 2) : In this dataset, most count matrices correspond to pooled libraries, meaning that a single matrix contains cells from multiple donors.
+ Libraries were generated from pooled samples as follows: 222 libraries include 8 donors, 4 libraries include 7 donors, and 8 libraries include a single donor.
+Additionally:
+Most pooled libraries were prepared as two replicate library preparations (e.g., B10-A and B10-B).
+
+
+Each replicate library was sequenced at two different sequencing centers (Broad and NYGC).
+
+
+Therefore, a library batch (e.g., B10) can produce four sequencing datasets:
+ B10-A-Broad, B10-A-NYGC, B10-B-Broad, and B10-B-NYGC.
+
+
+Because each pooled matrix contains multiple donors, we must assign each cell barcode to its donor before any other process.
+
+Input : count matrices (syn3157322) 
+
+
+To do this, we use the demultiplexing mapping file:
+ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv (syn34572333)
+
+
+This file links:
+cellBarcode + libraryBatch → individualID
+
+- Input : count matrices (syn3157322) 
+
+- Output file  : matrices_demultiplexed_final.rds  -> A flattened list of Seurat objects, where each element corresponds to an individual donor within a given library batch (named as libraryBatch_individualID).
+
+### How to run 
+- Command : bash run_1.demultiplex.sh
+  
+Rscript .../CopyOf1.demultiplex_matrices.R -> Runs the demultiplexing R script
+
+-directory /datos/rosmap/single_cell/matrix_exp_2/ -> Path to the folder containing the input count matrices downloaded from Synapse (Experiment 2).
+
+--metadata .../ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv -> Path to the demultiplexing mapping file. This file provides the key mapping: cellBarcode + libraryBatch → individualID.
+
+--output .../matrices_demultiplexed_proof.rds -> Output path for the generated .rds object.
+
+--test -> Runs the script in test mode (typically used to run a smaller subset / quick validation).
+
+
+## Quality control 
+
+Script : 2.quality_control.R 
+
+Make  structural integrity validation of the input Seurat objects (Seurat v5 layers-aware), ensuring the data are readable, consistent, and properly annotated before filtering.
+
+
+Perform standardized, multi-metric quality control on demultiplexed Seurat objects to remove low-quality cells, lowly detected genes, and predicted doublets before normalization/integration.
+
+- Input - A list of Seurat objects -> matrices_demultiplexed_final.rds
+
+- Output
+A timestamped output folder created in the current working directory:
+
+<INPUT_BASENAME>-YYYY-MM-DD_HH-MM/
+
+Main outputs include:
+seurat_list_filtered.rds — filtered Seurat object list (ready for normalization/integration)
+damaged_samples.txt — samples dropped due to structural issues (invalid assay layers or missing QC metrics)
+qc_cells_pre.csv — per-cell QC metrics before filtering
+qc_pre_summary.csv — per-sample summary statistics before filtering
+doublet_cells.csv — per-cell scDblFinder calls 
+doublet_summary.csv — per-sample doublet rate summary 
+qc_post_summary.csv — per-sample summary after QC filtering
+qc_summary_cells_sequential.csv — total cell counts retained after each QC step
+
+
+QC thresholds (current defaults): Cells are retained if they have at least 700 detected genes (nFeature_RNA ≥ 700) and 1500 UMIs (nCount_RNA ≥ 1500), with a maximum mitochondrial content of 13% (percent.mt ≤ 13). Genes are kept only if detected in at least 10 cells across the dataset. Doublet detection is enabled by default using scDblFinder, and mitochondrial genes are identified using the human gene prefix pattern "^MT-".
+
+### How to run 
+- Command : bash run_2.quality_control.sh
+
+Rscript ~/single_cell_networks/2.quality_control.R -> Runs the QC script.
+
+/STORAGE/csbig/sc_ADers/matrices_demultiplexed_final.rds -> (input): path to the demultiplexed Seurat list produced in demultiplexing step. 
+
+
+
+## QC Plots
+Script : 2.1.qc_plots.R
+
+This script takes as input the QC run output directory (the folder created by 2.quality_control.R) and reads the summary tables generated during QC . Using these files, it produces a complete set of QC plots to evaluate filtering thresholds and sample-level quality.
+
+- Input
+A QC output folder created in Step 2, for example:
+matrices_demultiplexed_final-YYYY-MM-DD_HH-MM/
+- Output
+A plots directory automatically created at:
+qc_plots_cowplot_style/<QC_RUN_FOLDER_NAME>/
+
+This folder contains:
+Multiple QC plots saved in PNG and JPG
+
+A combined PDF report:
+ QC_all_plots_2perpage.pdf
+
+### How to run 
+- Command : bash run_2.1_qc_plots.sh
+
+Rscript ~/single_cell_networks/2.1.qc_plots.R -> Runs the plotting script.
+
+/STORAGE/.../matrices_demultiplexed_final_QC-2026-01-28_19-55  -> (input): the QC output folder generated in Step 2. The script expects QC summary tables inside this folder and will create plots accordingly.
+
+ 
+
+## Normalization, Merge, and Integration
+
+Script : 3.merge_integration.R
+
+Merge QC-filtered Seurat objects, perform standard log-normalization, and integrate the dataset while correcting batch effects using Harmony. This step generates an integrated embedding (UMAP), clustering results, and a final merged Seurat object 
+
+Input :seurat_list_filtered.rds (output from Step 2: QC-filtered Seurat object list)
+
+ROSMAP_assay_scrnaSeq_metadata.csv, clinical_stratified.csv 
+- Output -> An output directory (set by --out_dir) containing:,  merged_by_individual_harmony.rds :  Final integrated Seurat object (Harmony-corrected) , merged_by_individual_harmony_cell_metadata.csv, Cell-level metadata from the final object, UMAPs and graphics
+
+Notes
+Normalization method: Seurat NormalizeData() (log-normalization).
+
+
+Batch correction: Harmony integration on libraryBatch (other variables like platformLocation can be added if needed).
+
+### How to run 
+- Command : bash run_3.merge_integration.sh
+
+Rscript ~/single_cell_networks/3.merge_integration.R -> Runs the merge + normalization + Harmony integration script.
+
+-s .../seurat_list_filtered.rds -> (input) : QC-filtered Seurat list produced by qc , This is the main object list that will be merged and integrated. 
+
+-a .../ROSMAP_assay_scrnaSeq_metadata.csv ->  assay-level metadata. Used to attach/validate experiment-level variables (e.g., library batch, sequencing batch, center/platform).
+
+-c .../clinical_stratified.csv ->  Clinical metadata table (preprocessed/stratified). Used to append donor-level clinical covariates (e.g., diagnosis groups, demographics, etc.) to the merged object.
+
+-o .../merge_integration_results_feb10 -> Output directory where all integration results will be saved (final .rds, plots, exported metadata).
+
+-w 12  -> Number of workers/threads used for parallel steps
 
 
 
