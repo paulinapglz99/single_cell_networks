@@ -162,16 +162,15 @@ msg("# Samples loaded: ", length(seurat_list))
 msg("# Example samples: ", paste(head(names(seurat_list), 5), collapse = ", "))
 msg("# Cells in first sample (raw): ", ncol(seurat_list[[1]]))
 
-#Validate layers + compute percent.mt + ensure sample_id
-                                    
-                                    
+# Validate samples: check RNA layers, compute percent.mt, and ensure sample_id
 bad <- character(0); i <- 0
 for (nm in names(seurat_list)) {
   i <- i + 1
   if (i %% 25 == 0) msg("... validated samples: ", i)
   obj <- seurat_list[[nm]]
   
-  # layers check
+  # 2) Compute mitochondrial percentage (stored as percent.mt in meta.data)
+  # Note: filtering by percent.mt is performed later as the final QC step
   if (!check_assay_layers(obj, "RNA")) { bad <- c(bad, nm); next }
   
   # compute percent.mt (the filter is not yet done, it will be later in the code)
@@ -181,24 +180,24 @@ for (nm in names(seurat_list)) {
                   error = function(e) { ok <<- FALSE; obj })
   if (!ok) { bad <- c(bad, nm); next }
   
-  # ensure sample_id
+  # 3) Ensure a consistent sample identifier column exists (sample_id)
   md <- obj@meta.data
   if (!"sample_id" %in% colnames(md)) {
     if ("sample" %in% colnames(md))          obj$sample_id <- obj$sample
     else if ("orig.ident" %in% colnames(md)) obj$sample_id <- obj$orig.ident
     else                                     obj$sample_id <- rep(nm, ncol(obj))
   }
-  seurat_list[[nm]] <- obj
+  seurat_list[[nm]] <- obj # Store the updated object back into the list
 }
 
-# drop damaged
+#  Drop samples that failed validation or percent.mt computation
 if (length(bad) > 0) {
   msg("# Dropping damaged samples: ", length(bad))
   writeLines(bad, file.path(outdir, "damaged_samples.txt"))
   seurat_list <- seurat_list[setdiff(names(seurat_list), bad)]
 } else msg("# No damaged samples detected")
 stopifnot(length(seurat_list) > 0)
-
+# Logging / sanity checks after validation
 msg("# Remaining samples: ", length(seurat_list))
 msg("# Cells in first sample (post-validate): ", ncol(seurat_list[[1]]))
 msg("# Mean percent.mt (first sample): ", round(mean(seurat_list[[1]]$percent.mt, na.rm = TRUE), 2))
@@ -206,7 +205,7 @@ msg("# RNA layers in first sample: ", paste(names(seurat_list[[1]][["RNA"]]@laye
 msg("# Head meta.data of first sample:")
 print(head(seurat_list[[1]]@meta.data[, c("sample_id","nFeature_RNA","nCount_RNA","percent.mt"), drop=FALSE]))
 
-# Optional: drop NA in percent.mt (just in case) 
+# Optional safety step: remove cells with NA percent.mt (if any)
 seurat_list <- lapply(seurat_list, function(obj) {
   md <- obj@meta.data
   keep <- !is.na(md$percent.mt)
