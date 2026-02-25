@@ -155,7 +155,7 @@ if (inherits(x, "Seurat")) {
   seurat_list <- x
   if (is.null(names(seurat_list))) names(seurat_list) <- paste0("sample", seq_along(seurat_list))  # Ensure the list is named 
 } else {
-  stop("Input .rds must be a Seurat object or a list of Seurat objects.")
+  stop("Input .rds must be a Seurat object or a list of Seurat objects.") # Fail is there is not a list on Seurat objects
 }
 
 msg("# Samples loaded: ", length(seurat_list))
@@ -163,6 +163,8 @@ msg("# Example samples: ", paste(head(names(seurat_list), 5), collapse = ", "))
 msg("# Cells in first sample (raw): ", ncol(seurat_list[[1]]))
 
 #Validate layers + compute percent.mt + ensure sample_id
+                                    
+                                    
 bad <- character(0); i <- 0
 for (nm in names(seurat_list)) {
   i <- i + 1
@@ -172,7 +174,7 @@ for (nm in names(seurat_list)) {
   # layers check
   if (!check_assay_layers(obj, "RNA")) { bad <- c(bad, nm); next }
   
-  # compute percent.mt (we WILL filter by mt at the END)
+  # compute percent.mt (the filter is not yet done, it will be later in the code)
   DefaultAssay(obj) <- "RNA"
   ok <- TRUE
   obj <- tryCatch({ obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern = mt_pattern); obj },
@@ -256,7 +258,7 @@ qc_pre_summary <- qc_cells_pre %>%
 
 readr::write_csv(qc_pre_summary, file.path(outdir, "qc_pre_summary.csv"))
 
-## Start the classic filters 
+## START THE CLASSIC FILTERS 
                       
 # 1) counts/filter
 msg("# Cell filtering (first pass): nFeature >= ", min_feat, " AND nCount >= ", min_count)
