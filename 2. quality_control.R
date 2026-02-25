@@ -111,23 +111,31 @@ check_assay_layers <- function(obj, assay = "RNA") {
 
 #3er helper
 # sum_presence_across ()
+# Computes global gene detection frequency across multiple Seurat objects.
+# For each gene, the function counts how many cells have non-zero raw counts
+# (counts > 0) within each sample and then accumulates these counts across
+# all samples.
 
-
+# The function returns a named integer vector where:
+#   - names = gene IDs
+#   - values = total number of cells (across all samples)
+#              in which the gene is detected.
 
 sum_presence_across <- function(seurat_list) {
   # Sum gene presence (>0 counts) across samples without huge cbind
   total <- integer(0); names(total) <- character(0) # Start  of a empy vector  
   for (nm in names(seurat_list)) { # each sample 
     m <- get_counts(seurat_list[[nm]]) # extract the counts of each sample 
-    v <- Matrix::rowSums(m > 0) # boolean matrix , how many times the gene apear in a cell Trues and False
-    v <- as.integer(v); names(v) <- rownames(m) 
+    v <- Matrix::rowSums(m > 0) #Count, per gene, the number of cells with non-zero counts in this sample.
+    v <- as.integer(v); names(v) <- rownames(m)  # Convert to integer and name the vector by gene IDs (rownames)
     if (length(total) == 0) {
-      total <- v
+      total <- v #Initialize the accumulator using the first sample
     } else {
-      common <- intersect(names(total), names(v))
-      if (length(common) > 0) total[common] <- total[common] + v[common]
-      newg <- setdiff(names(v), names(total))
-      if (length(newg) > 0) total[newg] <- v[newg]
+      common <- intersect(names(total), names(v)) 
+      ## Identify genes that are already present in the global accumulator and also detected in the current sample
+      if (length(common) > 0) total[common] <- total[common] + v[common] # For shared genes, add the current sample detection count to the accumulated global counts
+      newg <- setdiff(names(v), names(total)) # Identify genes that appear in the current sample but are not yet present in the accumulator
+      if (length(newg) > 0) total[newg] <- v[newg] # Add these new genes to the accumulator initializing their global detection counts
     }
   }
   total
@@ -136,16 +144,16 @@ sum_presence_across <- function(seurat_list) {
 msg("# Helpers ready")
 
 # Load input and normalize to list 
-x <- readRDS(input_path)
-msg("# x class: ", paste(class(x), collapse = ", "))
+x <- readRDS(input_path)  # Load the object 
+msg("# x class: ", paste(class(x), collapse = ", ")) # list of is a single object?
 
 if (inherits(x, "Seurat")) {
-  seurat_list <- list(x)
-  nm <- if ("sample_id" %in% colnames(x@meta.data)) unique(x$sample_id)[1] else "sample1"
+  seurat_list <- list(x) # If its an object we will convert it to a list of a Single element
+  nm <- if ("sample_id" %in% colnames(x@meta.data)) unique(x$sample_id)[1] else "sample1" # define the name of the sample 
   names(seurat_list) <- nm
-} else if (is.list(x) && all(vapply(x, function(z) inherits(z, "Seurat"), logical(1)))) {
+} else if (is.list(x) && all(vapply(x, function(z) inherits(z, "Seurat"), logical(1)))) { # And IF is a list , verify that all be seurat objects
   seurat_list <- x
-  if (is.null(names(seurat_list))) names(seurat_list) <- paste0("sample", seq_along(seurat_list))
+  if (is.null(names(seurat_list))) names(seurat_list) <- paste0("sample", seq_along(seurat_list))  # Ensure the list is named 
 } else {
   stop("Input .rds must be a Seurat object or a list of Seurat objects.")
 }
