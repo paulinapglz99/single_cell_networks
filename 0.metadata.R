@@ -1,15 +1,26 @@
 #metadata analysis
 
 #Libraries --- ---
+
+install.packages("rlang")
+
 pacman::p_load("tidyverse", 
                "ggplot2", 
                "gt")
+
+library(gt)
+packageVersion("rlang")
+
+install.packages("rlang")
 #Get data 
-clinical <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_clinical.csv")
-biospecimen <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_biospecimen_metadata.csv")
-assay <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_assay_scrnaSeq_metadata.csv")
-Exp_1_atlas <- vroom::vroom("/datos/rosmap/single_cell/metadata/Experiment1/ROSMAP_Brain.snRNAseq_metadata_cells_20230420.csv")
-demultiplex <- vroom::vroom("/datos/rosmap/single_cell/metadata/ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv")
+
+
+# Load data
+clinical <- vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_clinical.csv")
+biospecimen <- vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_biospecimen_metadata.csv")
+assay <- vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_assay_scrnaSeq_metadata.csv")
+#Exp_1_atlas <- vroom::vroom("/datos/rosmap/single_cell/metadata/Experiment1/ROSMAP_Brain.snRNAseq_metadata_cells_20230420.csv")
+demultiplex <- vroom::vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_snRNAseq_demultiplexed_ID_mapping.csv")
 
 #Filter to obtain only single nucleus assays
 dim(assay)
@@ -48,11 +59,12 @@ table(clinical$ceradsc)
 table(clinical$educ)
 
 # Create Alzheimer's diagnosis classification variable
-clinical <- clinical %>%
+# Stratify data ( escenario4 )
+clinical  <- clinical %>%
   mutate(is_AD = case_when(
-    cogdx == 1 & (braaksc != 0 & (ceradsc == 1 | ceradsc == 2)) ~ "AD-NC_ASYM",
-    cogdx == 1 & (ceradsc == 4 | ceradsc == 3) ~ "control",
-    (cogdx %in% c(4, 5) & ceradsc == 1) ~ "AD-NC_SYM",
+    cogdx == 1 & braaksc >= 3 & ceradsc %in% c(1, 2) ~ "AD-NC_ASYM",
+    cogdx == 1 & ceradsc %in% c(3, 4) ~ "control",
+    cogdx %in% c(4, 5) & braaksc >= 3 & ceradsc %in% c(1, 2) ~ "AD-NC_SYM",
     cogdx %in% c(2, 3) ~ "MCI",
     TRUE ~ NA_character_
   ))
@@ -61,7 +73,7 @@ clinical <- clinical %>%
   mutate(age_death = as.numeric(gsub("\\+", "", age_death)))
 
 table(clinical$is_AD)
-#write.csv(clinical, "clinical_stratified.csv", row.names = FALSE)
+write.csv(clinical, "clinical_stratified_s4.csv", row.names = FALSE)
 
 # Create demographic summary table grouped by Alzheimer's diagnosis (is_AD)
 tabla_resumen <- clinical %>%
@@ -95,7 +107,7 @@ tabla_final <- bind_rows(
 )
 
 print(tabla_final)
-#write.csv(tabla_final, "tabla_clinica_resumen.csv", row.names = FALSE)
+write.csv(tabla_final, "tabla_clinica_resumen_s4.csv", row.names = FALSE)
 
 # tabla with gt
 tabla_final_gt <- tabla_final %>%
@@ -123,7 +135,7 @@ tabla_final_gt <- tabla_final %>%
     row_group.font.weight = "bold",
     row_group.font.size = 12
   )
-
+tener 
 tabla_final_gt
 
 #ANOVA 

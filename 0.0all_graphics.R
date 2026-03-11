@@ -7,9 +7,9 @@ library(corrplot)
 library(vroom)
 
 # Load data
-clinical <- vroom("/datos/rosmap/single_cell/metadata/ROSMAP_clinical.csv")
-biospecimen <- vroom("/datos/rosmap/single_cell/metadata/ROSMAP_biospecimen_metadata.csv")
-assay <- vroom("/datos/rosmap/single_cell/metadata/ROSMAP_assay_scrnaSeq_metadata.csv")
+clinical <- vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_clinical.csv")
+biospecimen <- vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_biospecimen_metadata.csv")
+assay <- vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_assay_scrnaSeq_metadata.csv")
 
 # Filter biospecimen to keep only "single nucleus" samples
 biospecimen <- biospecimen %>%
@@ -75,15 +75,16 @@ corrplot(cor_matrix, method = "square", type = "upper",
          col = colorRampPalette(c("red4", "white", "#27408B"))(200),
          cl.pos = "b", zlim = c(-1, 1))
 
-# Stratify data
-metadata_ROSMAP <- clinical %>%
+# Stratify data ( escenario4 )
+metadata_ROSMAP  <- clinical %>%
   mutate(is_AD = case_when(
-    cogdx == 1 & (braaksc != 0 & ceradsc %in% c(1, 2)) ~ "AD-NC_ASYM",
+    cogdx == 1 & braaksc >= 3 & ceradsc %in% c(1, 2) ~ "AD-NC_ASYM",
     cogdx == 1 & ceradsc %in% c(3, 4) ~ "control",
-    cogdx %in% c(4, 5) & ceradsc == 1 ~ "AD-NC_SYM",
+    cogdx %in% c(4, 5) & braaksc >= 3 & ceradsc %in% c(1, 2) ~ "AD-NC_SYM",
     cogdx %in% c(2, 3) ~ "MCI",
     TRUE ~ NA_character_
   ))
 
 # save stratified metadata
-#write.csv(metadata_ROSMAP, "metadata_ROSMAP_stratified.csv", row.names = FALSE)
+write.csv(metadata_ROSMAP, "metadata_ROSMAP_stratified_s4.csv", row.names = FALSE)
+
