@@ -1,20 +1,20 @@
-#metadata analysis
+#metadata analysis ----
 
-#Libraries --- ---
+# Fix dependencies ----
+remove.packages("rlang")
+install.packages("rlang", dependencies = TRUE)
 
-install.packages("rlang")
+# Libraries ----
+if (!require("pacman")) install.packages("pacman")
 
-pacman::p_load("tidyverse", 
-               "ggplot2", 
-               "gt")
+pacman::p_load(
+  tidyverse,
+  ggplot2,
+  gt,
+  vroom
+)
 
-library(gt)
-packageVersion("rlang")
-
-install.packages("rlang")
 #Get data 
-
-
 # Load data
 clinical <- vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_clinical.csv")
 biospecimen <- vroom("/STORAGE/csbig/sc_ADers/metadata/ROSMAP_biospecimen_metadata.csv")
@@ -32,7 +32,7 @@ table(assay$platformLocation)
 #Biospecimen
 biospecimen <- biospecimen %>% 
   filter(nucleicAcidSource == "single nucleus") %>% 
-  filter(exclude == "FALSE")
+  filter(exclude == FALSE)
 table(biospecimen$tissue)
 table(biospecimen$organ)
 table(biospecimen$BrodmannArea)
@@ -72,8 +72,8 @@ clinical  <- clinical %>%
 clinical <- clinical %>%
   mutate(age_death = as.numeric(gsub("\\+", "", age_death)))
 
-table(clinical$is_AD)
-write.csv(clinical, "clinical_stratified_s4.csv", row.names = FALSE)
+table(clinical$is_AD, useNA = "always")
+write.csv(clinical, "~/clinical_stratified_s4.csv", row.names = FALSE)
 
 # Create demographic summary table grouped by Alzheimer's diagnosis (is_AD)
 tabla_resumen <- clinical %>%
@@ -107,7 +107,7 @@ tabla_final <- bind_rows(
 )
 
 print(tabla_final)
-write.csv(tabla_final, "tabla_clinica_resumen_s4.csv", row.names = FALSE)
+write.csv(tabla_final, "~/tabla_clinica_resumen_s4.csv", row.names = FALSE)
 
 # tabla with gt
 tabla_final_gt <- tabla_final %>%
@@ -135,7 +135,7 @@ tabla_final_gt <- tabla_final %>%
     row_group.font.weight = "bold",
     row_group.font.size = 12
   )
-tener 
+
 tabla_final_gt
 
 #ANOVA 
@@ -169,7 +169,7 @@ table_study <- get_tukey_table(clinical_test$Study_num, "Study (0=MAP, 1=ROS)")
 # Combine all tables into one
 final_tukey_table <- bind_rows(table_age, table_educ, table_sex, table_study)
 
-#write.csv(final_tukey_table, "tukey_significance_results.csv", row.names = FALSE)
+write.csv(final_tukey_table, "~/tukey_significance_results.csv", row.names = FALSE)
 
 # Function to create significance matrix
 get_significance_matrix <- function(var, var_label) {
@@ -194,7 +194,14 @@ significance_matrix <- reduce(
   by = "Comparison"
 )
 
-#write.csv(significance_matrix, "significance_matrix.csv", row.names = FALSE)
+write.csv(significance_matrix, "~/significance_matrix.csv", row.names = FALSE)
+
+
+# Verificar que el objeto existe y tiene datos
+dim(significance_matrix_long)
+head(significance_matrix_long)
+table(significance_matrix_long$Sig)
+
 
 # Prepare for heatmap
 significance_matrix_long <- significance_matrix %>% 
@@ -207,10 +214,21 @@ significance_matrix_plot <- ggplot(significance_matrix_long,
                                    aes(x = Variable, y = Comparison, fill = as.factor(Sig))) +
   geom_tile(color = "white", lwd = 1.5, linetype = 1) +
   scale_fill_manual(values = c("0" = "#4F94CD", "1" = "indianred1")) +
-
   theme_classic()
 
-significance_matrix_plot
+ 
+ png("~/significance_matrix_plot.png", width= 2400, height= 1800, res=300)
+  print(significance_matrix_plot)
+  dev.off() 
+  
+
+
+#changues for visualization in png 
+
+
+
+
+
 
 
 #Add data to multiplexing info --- ---
