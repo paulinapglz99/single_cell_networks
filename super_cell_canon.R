@@ -7,7 +7,7 @@ library(Seurat)
 library(SuperCell)
 
 
-obj <- readRDS("/STORAGE/csbig/sc_ADers/celltypist/unassigned_only_minimal_2/annotation_with_celltypist/merged_harmony_integrated_annotated_plus_celltypist.rds")
+obj <- readRDS("/STORAGE/csbig/sc_ADers/celltypist/celltypist/unassigned_only_final/annotation_with_celltypist/merged_harmony_integrated_annotated_plus_celltypist.rds")
 dim(obj)
 
 # Filtrar NAs y valores vacíos
@@ -68,7 +68,7 @@ supercell_plot(SC$graph.supercells,
                group = SC$SC.cell.split.condition.,
                main  = paste("Metacell network by phenotype, gamma =", SC$gamma),
                seed  = 42)
-dev.off()
+dev.off()bash
 
 cat("Plots guardados como PNG\n")
 #Save 
@@ -82,7 +82,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Nombre del archivo automático
 nombre <- file.path(out_dir, 
-                    paste0("SC_metacells_minimal_gamma", gamma_val, "_", fecha, ".rds"))
+                    paste0("SC_metacells_max_gamma", gamma_val, "_", fecha, ".rds"))
 
 saveRDS(SC, file = nombre)
 cat("Objeto guardado en:", nombre, "\n")

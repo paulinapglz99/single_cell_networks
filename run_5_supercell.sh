@@ -1,0 +1,11 @@
+Rscript ~/single_cell_networks/5_supercell.R \
+  --seurat_rds /STORAGE/csbig/sc_ADers/celltypist/celltypist/unassigned_only_final/annotation_with_celltypist/merged_harmony_integrated_annotated_plus_celltypist.rds \
+  --out_dir    /STORAGE/csbig/sc_ADers/supercell \
+  --gammas     "10,20,50" \
+  --cell_type_col cell_type \
+  --phenotype_col is_AD \
+  --reduction  harmony \
+  --n_pc       30 \
+  --k_knn      5 \
+  --workers    4 \
+  --seed       42
