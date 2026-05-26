@@ -6,26 +6,37 @@
 
 start_time <- Sys.time()
 #If any of this packages needed..
-if (!requireNamespace("pacman", quietly = FALSE)) install.packages("pacman", repos = "https://cloud.r-project.org")
-if (!requireNamespace("optparse", quietly = FALSE)) install.packages("optparse", repos = "https://cloud.r-project.org")
+#if (!requireNamespace("pacman", quietly = FALSE)) install.packages("pacman",lib="~/R/lib", repos = "https://cloud.r-project.org")
+#if (!requireNamespace("optparse", quietly = FALSE)) install.packages("optparse",lib="~/R/lib", repos = "https://cloud.r-project.org")
 #install.packages("sctransform")
 #BiocManager::install('glmGamPoi')
 
-ok <- pacman::p_load("Seurat",
-                     "tidyverse",
-                     #"sctransform",
-                     "purrr",
-                     "optparse",
-                     "future",
-                     "vroom", 
-                     "harmony")
+#ok <- pacman::p_load("Seurat",
+ #                    "tidyverse",
+  #                   #"sctransform",
+   #                  "purrr",
+    #                 "optparse",
+     #                "future",
+      #               "vroom", 
+       #              "harmony")
 
-if (all(ok)) {
-  message("All packages loaded correctly.")
-} else {
-  stop("Some packages loaded correctly.: ",
-       paste(names(ok)[!ok], collapse = ", "))
-}
+#if (all(ok)) {
+ # message("All packages loaded correctly.")
+#} else {
+ # stop("Some packages loaded correctly.: ",
+  #     paste(names(ok)[!ok], collapse = ", "))
+#}
+
+# Cargar librerías sin intentar instalar
+library(Seurat)
+library(tidyverse)
+library(purrr)
+library(optparse)
+library(future)
+library(vroom)
+library(harmony)
+
+message("All packages loaded correctly.")
 
 #Define option list for inputs
 
@@ -52,6 +63,9 @@ setwd(opt$out_dir)
 
 plan(multicore, workers = opt$workers)
 options(future.globals.maxSize = 200 * 1024^3)
+
+#plan(sequential)  # Sin paralelización
+#options(future.globals.maxSize = 200 * 1024^3)
 
 #Load data
 
