@@ -53,10 +53,23 @@ cells_keep <- !is.na(obj@meta.data[[opt$cell_type_col]]) &
 obj_clean <- obj[, cells_keep]
 
 # 1.2 JoinLayers DESPUÉS del filtro
-obj_clean <- JoinLayers(obj_clean)
+#obj_clean <- JoinLayers(obj_clean)
 
-# 2. Extract expression matrix 
-ge_matrix_cells <- GetAssayData(obj_clean, assay = "RNA", layer = "data")
+# 2. Extract expression matrix -Esta linea es la buena 
+#ge_matrix_cells <- GetAssayData(obj_clean, assay = "RNA", layer = "data")
+
+#probemos extarer matrix sIN S5
+
+data_layers <- grep("^data\\.", names(obj_clean[["RNA"]]@layers), value = TRUE)
+
+ge_matrix_cells <- do.call(cbind, lapply(
+  data_layers,
+  function(l) obj_clean[["RNA"]]@layers[[l]]
+))
+
+rownames(ge_matrix_cells) <- rownames(obj_clean[["RNA"]])
+
+
 
 # 3. Average with supercell_GE — principal function
 ge_matrix <- supercell_GE(
