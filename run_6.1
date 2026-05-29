@@ -1,0 +1,7 @@
+Rscript ~/single_cell_networks/6.1_builmetacells.R \
+  --seurat_rds /STORAGE/csbig/sc_ADers/celltypist/unassigned_only_minimal_2/annotation_with_celltypist/merged_harmony_integrated_annotated_plus_celltypist.rds \
+  --sc_rds     /STORAGE/csbig/sc_ADers/supercell_test/SC_gamma20.rds \
+  --out_dir    /STORAGE/csbig/sc_ADers/matrices_aracne_test_6.1 \
+  --cell_type_col cell_type \
+  --phenotype_col is_AD \
+  --cell_types "Excitatory Neurons,Inhibitory Neurons,Astrocyte,Oligodendrocytes,Endothelial,OPCs,Microglia"
