@@ -61,11 +61,11 @@ setwd(opt$out_dir)
 
 #Parallelization
 
-plan(multicore, workers = opt$workers)
-options(future.globals.maxSize = 200 * 1024^3)
+#plan(multicore, workers = opt$workers)
+#options(future.globals.maxSize = 250 * 1024^3)
 
-#plan(sequential)  # Sin paralelización
-#options(future.globals.maxSize = 200 * 1024^3)
+plan(sequential)  # Sin paralelización
+options(future.globals.maxSize = 250 * 1024^3)
 
 #Load data
 
@@ -95,6 +95,7 @@ assay_metadata.df <- assay_metadata.df %>%
     "R[0-9]+$"))
 
 #Keep only individuals with clinical data (que ya filtramos para tener solo los que tienen fenotipo)
+	
 
 assay_metadata.df <- assay_metadata.df %>%
   filter(individualID %in% clinical_metadata.df$individualID)
@@ -168,7 +169,6 @@ x <- setNames(
   }),
   names(x)
 )
-
 # #Merge Seurat objects by individual
 # 
 # #For each object, we take the unique individualID
