@@ -61,11 +61,11 @@ setwd(opt$out_dir)
 
 #Parallelization
 
-#plan(multicore, workers = opt$workers)
-#options(future.globals.maxSize = 250 * 1024^3)
-
-plan(sequential)  # Sin paralelización
+plan(multicore, workers = opt$workers)
 options(future.globals.maxSize = 250 * 1024^3)
+
+#plan(sequential)  # Sin paralelización
+#options(future.globals.maxSize = 250 * 1024^3)
 
 #Load data
 
@@ -211,13 +211,27 @@ x <- setNames(
 # #Check merged_by_individual. It's a list of Seurat objs, one per individual
 # length(merged_by_individual)
 
+
+#message("#Merge everything")
+#merged <- merge(x[[1]], x[-1])
+
+#message("#Normalization \n")
+
+#DefaultAssay(merged) <- "RNA"
+#merged <- NormalizeData(merged, verbose = FALSE)
+
+
+#Fist normalization 
+
+message("#Normalization per sample \n")
+x <- lapply(x, function(obj) {
+  DefaultAssay(obj) <- "RNA"
+  NormalizeData(obj, verbose = FALSE)
+})
+
 message("#Merge everything")
 merged <- merge(x[[1]], x[-1])
 
-message("#Normalization \n")
-
-DefaultAssay(merged) <- "RNA"
-merged <- NormalizeData(merged, verbose = FALSE)
 
 #Find Variable Features
 
