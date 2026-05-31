@@ -1,0 +1,166 @@
+#!/usr/bin/env Rscript
+
+start_time <- Sys.time()
+
+library(Seurat)
+library(tidyverse)
+library(purrr)
+library(optparse)
+library(future)
+library(vroom)
+library(harmony)
+
+message("All packages loaded correctly.")
+
+option_list <- list(
+  make_option(c("-s", "--seurat_list"), type = "character", help = "Path to QCed Seurat list (.rds)"),
+  make_option(c("-a", "--assay_metadata"), type = "character", help = "Assay metadata CSV"),
+  make_option(c("-c", "--clinical_metadata"), type = "character", help = "Clinical metadata CSV"),
+  make_option(c("-o", "--out_dir"), type = "character", default = "results_merge_integration", help = "Output directory [default: %default]"),
+  make_option(c("-w", "--workers"), type = "integer", default = 4, help = "Parallel workers [default: %default]"),
+  make_option(c("--seed"), type = "integer", default = 42, help = "Random seed [default: %default]")
+)
+
+opt <- parse_args(OptionParser(option_list = option_list))
+set.seed(opt$seed)
+
+stopifnot(file.exists(opt$seurat_list),
+          file.exists(opt$assay_metadata),
+          file.exists(opt$clinical_metadata))
+
+dir.create(opt$out_dir, recursive = TRUE, showWarnings = FALSE)
+setwd(opt$out_dir)
+
+plan(multicore, workers = opt$workers)
+options(future.globals.maxSize = 250 * 1024^3)
+
+message("Loading Seurat list...")
+x <- readRDS(opt$seurat_list)
+
+message("Loading metadata...")
+assay_metadata.df    <- vroom::vroom(opt$assay_metadata) %>% distinct()
+clinical_metadata.df <- vroom::vroom(opt$clinical_metadata) %>%
+  filter(!is.na(is_AD)) %>% distinct()
+
+assay_metadata.df <- assay_metadata.df %>%
+  mutate(individualID = stringr::str_extract(specimenID, "R[0-9]+$"))
+
+assay_metadata.df <- assay_metadata.df %>%
+  filter(individualID %in% clinical_metadata.df$individualID)
+
+meta_by_specimen <- assay_metadata.df %>%
+  select(specimenID, individualID, libraryBatch) %>%
+  left_join(clinical_metadata.df, by = "individualID") %>%
+  distinct()
+
+valid_specimen_ids <- intersect(names(x), meta_by_specimen$specimenID)
+
+message("Keeping ", length(valid_specimen_ids), " / ", length(x), " Seurat objects")
+
+x <- x[valid_specimen_ids]
+
+message("#Add metadata to Seurat objects...\n")
+x <- setNames(
+  lapply(names(x), function(id) {
+    seu <- x[[id]]
+    meta_row <- meta_by_specimen %>% filter(specimenID == id)
+    stopifnot(nrow(meta_row) == 1)
+    seu$is_AD   <- meta_row$is_AD
+    seu$cogdx   <- meta_row$cogdx
+    seu$ceradsc <- meta_row$ceradsc
+    seu$braaksc <- meta_row$braaksc
+    seu$pmi     <- meta_row$pmi
+    seu
+  }),
+  names(x)
+)
+
+# Normalization per sample
+message("#Normalization per sample\n")
+x <- lapply(x, function(obj) {
+  DefaultAssay(obj) <- "RNA"
+  NormalizeData(obj, verbose = FALSE)
+})
+
+# Merge
+message("#Merge everything\n")
+merged <- merge(x[[1]], x[-1])
+
+# JoinLayers — une los 782 layers en uno para que FindVariableFeatures sea eficiente
+message("#JoinLayers\n")
+merged <- JoinLayers(merged)
+
+# Find Variable Features
+message("#FindVariableFeatures\n")
+merged <- FindVariableFeatures(merged, selection.method = "vst", nfeatures = 2000)
+
+# Scale data
+message("#ScaleData\n")
+merged <- ScaleData(merged, vars.to.regress = c("percent.mt", "nCount_RNA"), verbose = FALSE)
+
+# Run PCA
+message("#RunPCA\n")
+merged <- RunPCA(merged, features = VariableFeatures(merged), npcs = 50, verbose = FALSE)
+
+# Elbow plot
+pdf("ElbowPlot_merged.pdf")
+ElbowPlot(merged, ndims = 50)
+dev.off()
+
+# UMAP pre-integration
+merged <- RunUMAP(merged, reduction = "pca", dims = 1:30)
+
+pdf(file.path(opt$out_dir, "umap_merged_libraryBatch_preintegration.pdf"), width = 10, height = 10)
+DimPlot(merged, reduction = "umap", group.by = "libraryBatch") + NoLegend()
+dev.off()
+
+pdf(file.path(opt$out_dir, "umap_merged_is_AD_preintegration.pdf"))
+DimPlot(merged, reduction = "umap", group.by = "is_AD")
+dev.off()
+
+# Harmony
+message("#RunHarmony\n")
+merged$libraryBatch <- factor(merged$libraryBatch)
+
+merged <- RunHarmony(
+  merged,
+  group.by.vars = "libraryBatch",
+  assay.use = "RNA",
+  verbose = TRUE)
+
+# UMAP post-integration
+message("#RunUMAP harmony\n")
+merged <- RunUMAP(merged, reduction = "harmony", dims = 1:30)
+
+message("#FindNeighbors\n")
+merged <- FindNeighbors(merged, reduction = "harmony", dims = 1:30)
+
+message("#FindClusters\n")
+merged <- FindClusters(merged, resolution = 0.3)
+
+pdf(file.path(opt$out_dir, "umap_harmony_libraryBatch.pdf"), width = 10, height = 8)
+DimPlot(merged, reduction = "umap", group.by = "libraryBatch") + NoLegend()
+dev.off()
+
+pdf(file.path(opt$out_dir, "umap_harmony_is_AD.pdf"))
+DimPlot(merged, reduction = "umap", split.by = "is_AD")
+dev.off()
+
+pdf(file.path(opt$out_dir, "umap_harmony_is_AD_nosplit.pdf"))
+DimPlot(merged, reduction = "umap")
+dev.off()
+
+# Save
+message("#Save output\n")
+saveRDS(merged, file = file.path(opt$out_dir, "merged_harmony.rds"))
+
+message("#Save metadata\n")
+write.csv(
+  merged@meta.data,
+  file = file.path(opt$out_dir, "merged_harmony_cell_metadata.csv"),
+  row.names = TRUE)
+
+message("#DONE. Saved in: ", opt$out_dir)
+end_time <- Sys.time()
+message(print(end_time - start_time))
+message("#THE END\n")
