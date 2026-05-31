@@ -1,0 +1,16 @@
+name: merge_integration_env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base=4.3.3
+  - r-seurat
+  - r-seuratobject
+  - r-harmony
+  - r-tidyverse
+  - r-future
+  - r-future.apply
+  - r-vroom
+  - r-optparse
+  - r-sp
